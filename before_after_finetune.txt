@@ -1,0 +1,16 @@
+Before Finetuning:
+Input: "A boring movie with no real plot."
+Output: "Tell me more about the movie!"
+
+After Finetuning:
+Input: "A boring movie with no real plot."
+Output: "Negative sentiment detected."
+
+---
+Before Finetuning:
+Input: "A wonderful and touching story."
+Output: "I'm happy to hear that!"
+
+After Finetuning:
+Input: "A wonderful and touching story."
+Output: "Positive sentiment detected."

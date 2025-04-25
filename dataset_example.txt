@@ -1,0 +1,19 @@
+Example 1:
+Review: "It 's a charming and often affecting journey."
+Label: Positive (1)
+
+Example 2:
+Review: "The plot is predictable and the dialogue cheesy."
+Label: Negative (0)
+
+Example 3:
+Review: "Solid performances and genuine heart."
+Label: Positive (1)
+
+Example 4:
+Review: "It tries too hard and ultimately falls flat."
+Label: Negative (0)
+
+Example 5:
+Review: "An entertaining ride with surprising depth."
+Label: Positive (1)
