@@ -1,37 +1,76 @@
 #!/usr/bin/env python3
+"""
+prepare_and_download_finetune.py
+
+1) snapshot_download the HF model (no git-lfs)
+2) load via Transformers and re-save a proper model+tokenizer in finetune_data/model/
+3) load SST-2 & dump train/validation/test as JSONL into finetune_data/
+"""
+
 import os
+import json
 from pathlib import Path
 
 from huggingface_hub import snapshot_download
 from datasets import load_dataset
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    AutoModelForSequenceClassification,
+)
 
 # ── CONFIG ───────────────────────────────────────────────────────────────────
 MODEL_ID    = "QuantFactory/Llama-3.1-SauerkrautLM-8b-Instruct-GGUF"
 DATA_NAME   = "glue"
 DATA_CONFIG = "sst2"
-OUT_DIR     = Path("finetune_data")
+OUT_ROOT    = Path("finetune_data")
+MODEL_DIR   = OUT_ROOT / "model"
 
-# ── SETUP ────────────────────────────────────────────────────────────────────
-OUT_DIR.mkdir(exist_ok=True)
-MODEL_DIR = OUT_DIR / "model"
-MODEL_DIR.mkdir(exist_ok=True)
+# ── PREPARE FOLDERS ──────────────────────────────────────────────────────────
+OUT_ROOT.mkdir(exist_ok=True)
+MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── 1) Download the HF model repo via HTTP (no git-lfs) ──────────────────────
-print("Downloading model repo via snapshot_download…")
-repo_path = snapshot_download(
+# ── 1) Download the HF repo via HTTP ─────────────────────────────────────────
+print("1) snapshot_download (HTTP) → fetching all repo files…")
+cache_path = snapshot_download(
     repo_id=MODEL_ID,
-    cache_dir=str(MODEL_DIR),
-    repo_type="model",       # default, but explicit here
-    local_files_only=False   # ensure we hit the network if not cached
+    repo_type="model",
+    local_files_only=False
 )
-print(f"✓ Model files written to {MODEL_DIR}")
+print("   → cached at:", cache_path)
 
-# ── 2) Pull raw SST-2 splits and save as JSONL ───────────────────────────────
-print("Downloading SST-2 dataset…")
+# ── 2) Load + re-export a real Transformers repo ──────────────────────────────
+print("2) Loading tokenizer…")
+tokenizer = AutoTokenizer.from_pretrained(cache_path, use_fast=True)
+
+print("3) Loading base LM model (for config)…")
+base_lm = AutoModelForCausalLM.from_pretrained(cache_path)
+
+print("4) Loading sequence-classification head…")
+cls_model = AutoModelForSequenceClassification.from_pretrained(
+    cache_path,
+    num_labels=2,
+    ignore_mismatched_sizes=True,
+)
+
+print(f"5) Saving model+tokenizer → {MODEL_DIR}")
+tokenizer.save_pretrained(MODEL_DIR)
+cls_model.save_pretrained(MODEL_DIR)
+
+# ── 3) Download SST-2 & dump JSONL ────────────────────────────────────────────
+print("6) Downloading SST-2 splits and writing JSONL…")
 ds = load_dataset(DATA_NAME, DATA_CONFIG)
 for split, data in ds.items():
-    out_file = OUT_DIR / f"{split}.jsonl"
-    print(f"  • Saving {split} → {out_file}")
-    data.to_json(out_file, orient="records", lines=True)
+    out_file = OUT_ROOT / f"{split}.jsonl"
+    print(f"   • {split} → {out_file}")
+    # write newline-delimited JSON
+    with open(out_file, "w") as fp:
+        for record in data:
+            fp.write(json.dumps({
+                "sentence":    record["sentence"],
+                "label":       record["label"],
+            }) + "\n")
 
-print("✅ Finished. Repo + data are in ./finetune_data/")
+print("\n✅ All set! You now have:")
+print("   • Model + tokenizer in:", MODEL_DIR)
+print("   • SST-2 JSONL splits in:", OUT_ROOT) 
