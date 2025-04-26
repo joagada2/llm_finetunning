@@ -2,32 +2,13 @@
 """
 gpu_finetune_complete.py
 
-All-in-one script for finetuning stabilityai/stablelm-base-alpha-7b on SST-2:
-- Redirects ALL HF caches to ./hf_cache/ before any imports
-- Uses DeepSpeed Stage2 offload, fp16, gradient checkpointing
-- Applies LoRA on GPT-NeoX modules
-- Legacy Trainer with eval_steps/save_steps
-- Avoids home-dir quota errors
+Optimized finetuning of stabilityai/stablelm-base-alpha-7b on SST-2,
+with HF cache redirection, optional DeepSpeed, LoRA, fp16, and legacy Trainer args.
 """
 
 import os
-from pathlib import Path
-
-# 0) Redirect ALL HF caches immediately before any HF imports
-BASE = Path(__file__).parent
-HF_CACHE = BASE / "hf_cache"
-for sub in ("hub", "transformers", "datasets", "metrics"):
-    (HF_CACHE / sub).mkdir(parents=True, exist_ok=True)
-
-os.environ.update({
-    "HF_HOME":            str(HF_CACHE / "hub"),
-    "TRANSFORMERS_CACHE": str(HF_CACHE / "transformers"),
-    "HF_DATASETS_CACHE":  str(HF_CACHE / "datasets"),
-    "HF_METRICS_CACHE":   str(HF_CACHE / "metrics"),
-    "WANDB_DISABLED":     "true",
-})
-
 import json
+from pathlib import Path
 import numpy as np
 from sklearn.metrics import accuracy_score
 from datasets import load_dataset
@@ -40,7 +21,24 @@ from transformers import (
 )
 from peft import LoraConfig, get_peft_model
 
+# ────────────────────────────────────────────────────────────────────────────────
+# 0) Redirect ALL HF caches to ./hf_cache before any HF imports
+# ────────────────────────────────────────────────────────────────────────────────
+BASE = Path(__file__).parent
+HF_CACHE = BASE / "hf_cache"
+for sub in ("hub", "transformers", "datasets", "metrics"):
+    (HF_CACHE / sub).mkdir(parents=True, exist_ok=True)
+
+os.environ.update({
+    "HF_HOME":            str(HF_CACHE / "hub"),
+    "TRANSFORMERS_CACHE": str(HF_CACHE / "transformers"),
+    "HF_DATASETS_CACHE":  str(HF_CACHE / "datasets"),
+    "HF_METRICS_CACHE":   str(HF_CACHE / "metrics"),
+})
+
+# ────────────────────────────────────────────────────────────────────────────────
 # 1) Paths & seed
+# ────────────────────────────────────────────────────────────────────────────────
 set_seed(42)
 DATA_ROOT  = BASE / "finetune_data"
 MODEL_DIR  = DATA_ROOT / "model"
@@ -48,30 +46,48 @@ TRAIN_FILE = DATA_ROOT / "train.jsonl"
 VALID_FILE = DATA_ROOT / "validation.jsonl"
 MAX_LEN    = 128
 
-# 2) DeepSpeed config
-ds_conf = {
-    "zero_optimization": {
-        "stage": 2,
-        "offload_optimizer": {"device": "cpu"},
-        "offload_param":     {"device": "cpu"},
-    },
-    "train_batch_size": 16,
-    "gradient_accumulation_steps": 2,
-    "fp16": {"enabled": True},
-}
-with open("ds_config.json", "w") as f:
-    json.dump(ds_conf, f, indent=2)
+# ────────────────────────────────────────────────────────────────────────────────
+# 2) Optional DeepSpeed config (only if installed)
+# ────────────────────────────────────────────────────────────────────────────────
+use_deepspeed = False
+try:
+    import deepspeed  # noqa: F401
+    use_deepspeed = True
+except ImportError:
+    print(">>> DeepSpeed not found; skipping ZeRO offload.")
 
-# 3) Load & patch tokenizer/model
+ds_config_path = None
+if use_deepspeed:
+    ds_conf = {
+        "zero_optimization": {
+            "stage": 2,
+            "offload_optimizer": {"device": "cpu"},
+            "offload_param":     {"device": "cpu"},
+        },
+        "train_batch_size":            16,
+        "gradient_accumulation_steps": 2,
+        "fp16":                        {"enabled": True},
+    }
+    ds_config_path = BASE / "ds_config.json"
+    with open(ds_config_path, "w") as f:
+        json.dump(ds_conf, f, indent=2)
+    print(f">>> DeepSpeed config written to {ds_config_path}")
+
+# ────────────────────────────────────────────────────────────────────────────────
+# 3) Load & patch tokenizer + model
+# ────────────────────────────────────────────────────────────────────────────────
 tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, use_fast=True)
 tokenizer.pad_token = tokenizer.eos_token
+
 model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_DIR, num_labels=2, ignore_mismatched_sizes=True
+    MODEL_DIR,
+    num_labels=2,
+    ignore_mismatched_sizes=True,
 )
 model.config.pad_token_id = tokenizer.eos_token_id
 model.resize_token_embeddings(len(tokenizer))
 
-# Apply LoRA
+# Apply LoRA on NeoX modules
 lora_cfg = LoraConfig(
     r=16,
     lora_alpha=32,
@@ -79,11 +95,13 @@ lora_cfg = LoraConfig(
 )
 model = get_peft_model(model, lora_cfg)
 
-# 4) Dataset prep
+# ────────────────────────────────────────────────────────────────────────────────
+# 4) Dataset preparation
+# ────────────────────────────────────────────────────────────────────────────────
 raw = load_dataset(
     "json",
     data_files={"train": str(TRAIN_FILE), "validation": str(VALID_FILE)},
-    cache_dir=str(HF_CACHE / "datasets")
+    cache_dir=str(HF_CACHE / "datasets"),
 )
 
 def preprocess(batch):
@@ -104,13 +122,17 @@ tokenized = raw.map(
 )
 tokenized.set_format("torch", columns=["input_ids", "attention_mask", "labels"])
 
+# ────────────────────────────────────────────────────────────────────────────────
 # 5) Metrics
+# ────────────────────────────────────────────────────────────────────────────────
 def compute_metrics(pred):
     preds = np.argmax(pred.predictions, axis=-1)
     return {"accuracy": accuracy_score(pred.label_ids, preds)}
 
-# 6) TrainingArguments (legacy)
-training_args = TrainingArguments(
+# ────────────────────────────────────────────────────────────────────────────────
+# 6) TrainingArguments (legacy style, with report_to=[] to disable W&B)
+# ────────────────────────────────────────────────────────────────────────────────
+training_args_kwargs = dict(
     output_dir="gpu_finetuned_complete",
     logging_dir="logs_complete",
     num_train_epochs=3,
@@ -120,12 +142,17 @@ training_args = TrainingArguments(
     weight_decay=0.01,
     fp16=True,
     gradient_checkpointing=True,
-    deepspeed="ds_config.json",
     logging_steps=50,
     eval_steps=500,
     save_steps=500,
     save_total_limit=2,
+    report_to=[],  # disables all experiment tracking (e.g. W&B)
 )
+
+if use_deepspeed:
+    training_args_kwargs["deepspeed"] = str(ds_config_path)
+
+training_args = TrainingArguments(**training_args_kwargs)
 
 trainer = Trainer(
     model=model,
@@ -136,7 +163,9 @@ trainer = Trainer(
     compute_metrics=compute_metrics,
 )
 
+# ────────────────────────────────────────────────────────────────────────────────
 # 7) Train & evaluate
+# ────────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     trainer.train()
     print(">> Running final evaluation")
