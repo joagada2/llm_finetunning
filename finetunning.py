@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+import os
+import sys
 import torch
-
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
@@ -24,29 +25,46 @@ def tokenize_function(example, tokenizer):
 
 def main():
     # Check GPU availability
-    print("CUDA available? ", torch.cuda.is_available())
-    print("CUDA device count: ", torch.cuda.device_count())
+    print("CUDA available?", torch.cuda.is_available())
+    print("CUDA device count:", torch.cuda.device_count())
     if torch.cuda.is_available():
-        print("CUDA device name: ", torch.cuda.get_device_name(0))
+        print("CUDA device name:", torch.cuda.get_device_name(0))
     else:
         print("No CUDA devices found. Training will run on CPU.")
-    # Change here to the LLaMA-2 model you prefer
-    model_name   = "meta-llama/Llama-2-7b-chat-hf"
+
+    # Ensure HF token for gated models
+    hf_token = os.getenv("HF_TOKEN")
+    if not hf_token:
+        print("Warning: HF_TOKEN not set. Accessing gated repos will fail.", file=sys.stderr)
+
+    # Change to a LLaMA-2 model you have access to
+    model_name = os.getenv("BASE_MODEL", "meta-llama/Llama-2-7b-chat-hf")
     dataset_name = "glue"
-    subset_name  = "sst2"
+    subset_name = "sst2"
 
-    # 1) Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
-        trust_remote_code=True,
-    )
+    # 1) Load tokenizer with authentication
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+            use_auth_token=hf_token,
+        )
+    except Exception as e:
+        print(f"Error loading tokenizer for {model_name}: {e}", file=sys.stderr)
+        sys.exit(1)
 
-    # 2) Load model in FP16/FP32
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        trust_remote_code=True,
-        device_map="auto",
-    )
+    # 2) Load model in FP16/FP32 with authentication
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+            device_map="auto",
+            use_auth_token=hf_token,
+        )
+    except Exception as e:
+        print(f"Error loading model {model_name}: {e}", file=sys.stderr)
+        sys.exit(1)
+
     if torch.cuda.is_available():
         model = model.half().cuda()
 
