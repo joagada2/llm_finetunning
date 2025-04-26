@@ -1,10 +1,14 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
 
-def download_model_and_dataset():
-    model_name = "Qwen/Qwen1.5-7B-Chat"  # 7B model
-    dataset_name = "glue"
-    subset_name = "sst2"
+from transformers import AutoModelForCausalLM
+
+model = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen2.5-0.5B",
+    trust_remote_code=True,
+    device_map="auto",
+    quantization_config=None,   # ← disable all bnb quantization
+)
 
     # Download model
     print("Downloading model...")
