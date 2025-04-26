@@ -9,23 +9,18 @@ def download_model_and_dataset(
     dataset_name: str,
     dataset_config: str | None = None
 ):
-    # 1) Download the tokenizer repo (files only)
-    print(f"Downloading tokenizer for {model_name}...")
-    tokenizer_cache = snapshot_download(
+    # Download the model repository (includes tokenizer and model files)
+    print(f"Downloading all files for {model_name}...")
+    repo_cache = snapshot_download(
         repo_id=model_name,
-        subfolder="tokenizer",
-        use_auth_token=os.getenv("HF_TOKEN"),
+        use_auth_token=os.getenv("HF_TOKEN") or None,
     )
 
-    # 2) Download the model repo (files only)
-    print(f"Downloading model repository {model_name}...")
-    model_cache = snapshot_download(
-        repo_id=model_name,
-        subfolder=None,
-        use_auth_token=os.getenv("HF_TOKEN"),
-    )
+    # Inform user where files are
+    print("✅ Model & tokenizer files downloaded.")
+    print(f"Local cache directory: {repo_cache}\n")
 
-    # 3) Download the dataset
+    # Download the dataset
     cfg = f", config='{dataset_config}'" if dataset_config else ""
     print(f"Downloading dataset {dataset_name}{cfg}...")
     if dataset_config:
@@ -33,13 +28,10 @@ def download_model_and_dataset(
     else:
         dataset = load_dataset(dataset_name)
 
-    print("✅ Files downloaded (model & dataset). \n" \
-          f"Tokenizer files in: {tokenizer_cache}\n" \
-          f"Model files in: {model_cache}")
-    return tokenizer_cache, model_cache, dataset
+    print("✅ Dataset downloaded.")
+    return repo_cache, dataset
 
 if __name__ == "__main__":
-    # Set defaults or override via environment
     model_name   = os.getenv("BASE_MODEL", "distilgpt2")
     dataset_name = os.getenv("DATASET_NAME", "trl-lib/Capybara")
     dataset_cfg  = os.getenv("DATASET_CONFIG", None)
