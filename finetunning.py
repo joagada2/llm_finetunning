@@ -40,9 +40,9 @@ def main():
         sys.exit(1)
 
     # Model and dataset config
-    model_name = os.getenv("BASE_MODEL", "meta-llama/Llama-2-7b-chat-hf")
+    model_name   = os.getenv("BASE_MODEL", "meta-llama/Llama-2-7b-chat-hf")
     dataset_name = "glue"
-    subset_name = "sst2"
+    subset_name  = "sst2"
 
     # 1) Load tokenizer
     try:
