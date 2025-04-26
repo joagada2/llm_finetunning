@@ -1,30 +1,51 @@
+#!/usr/bin/env python3
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    Trainer,
+    TrainingArguments,
+    BitsAndBytesConfig,
+)
 from peft import prepare_model_for_kbit_training, LoraConfig, get_peft_model
 from datasets import load_dataset
 
 def tokenize_function(example, tokenizer):
     prompt = f"Review: {example['sentence']} Sentiment:"
     label_text = " Positive" if example['label'] == 1 else " Negative"
-    result = tokenizer(prompt + label_text, truncation=True, padding="max_length", max_length=256)
+    result = tokenizer(
+        prompt + label_text,
+        truncation=True,
+        padding="max_length",
+        max_length=256,
+    )
     result["labels"] = result["input_ids"].copy()
     return result
 
 def main():
-    model_name = "Qwen/Qwen1.5-7B-Chat"
+    model_name   = "Qwen/Qwen1.5-7B-Chat"
     dataset_name = "glue"
-    subset_name = "sst2"
+    subset_name  = "sst2"
 
-    # Load model and tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    # 1) Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name,
+        trust_remote_code=True,
+    )
+
+    # 2) Load model with NO bitsandbytes quantization
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=False,
+        load_in_8bit=False,
+    )
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         trust_remote_code=True,
         device_map="auto",
-        load_in_4bit=True
+        quantization_config=bnb_config,
     )
 
-    # Prepare model for LoRA
+    # 3) Prepare model for k-bit (LoRA) training
     model = prepare_model_for_kbit_training(model)
 
     lora_config = LoraConfig(
@@ -33,17 +54,21 @@ def main():
         target_modules=["q_proj", "v_proj"],
         lora_dropout=0.05,
         bias="none",
-        task_type="CAUSAL_LM"
+        task_type="CAUSAL_LM",
     )
     model = get_peft_model(model, lora_config)
 
-    # Load and tokenize labeled dataset
+    # 4) Load & tokenize dataset
     dataset = load_dataset(dataset_name, subset_name)
-    tokenized_dataset = dataset["train"].map(lambda x: tokenize_function(x, tokenizer), batched=False)
+    tokenized = dataset["train"].map(
+        lambda ex: tokenize_function(ex, tokenizer),
+        batched=False,
+    )
 
-    # Train/Val Split
-    split_dataset = tokenized_dataset.train_test_split(test_size=0.1)
+    # 5) Split for eval
+    split = tokenized.train_test_split(test_size=0.1)
 
+    # 6) Training args
     training_args = TrainingArguments(
         output_dir="./qwen2.5_sst2_lora",
         evaluation_strategy="steps",
@@ -57,17 +82,16 @@ def main():
         save_strategy="epoch",
         bf16=True,
         save_total_limit=1,
-        report_to="none"
+        report_to="none",
     )
 
+    # 7) Trainer & train
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=split_dataset["train"],
-        eval_dataset=split_dataset["test"],
+        train_dataset=split["train"],
+        eval_dataset=split["test"],
     )
-
-    # Start finetuning
     trainer.train()
 
 if __name__ == "__main__":
