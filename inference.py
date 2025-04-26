@@ -13,38 +13,29 @@ def get_latest_checkpoint(output_dir: str) -> str:
     print(f"Latest checkpoint found: {latest}")
     return latest
 
+from transformers import BitsAndBytesConfig
+
 def load_model(
     base_model_name: str,
     lora_weights_path: str | None = None
 ):
-    print(f"Loading base model: {base_model_name}")
-    # 1) tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(
-        base_model_name,
-        trust_remote_code=True,
-    )
+    # … tokenizer as before …
 
-    # 2) base model (no bnb quant)
+    # ❶ Tell Transformers to load the base model in 4-bit
+    bnb_conf = BitsAndBytesConfig(
+        load_in_4bit=True,
+        llm_int8_threshold=6.0,   # optional, defaults are fine
+    )
     model = AutoModelForCausalLM.from_pretrained(
         base_model_name,
         trust_remote_code=True,
         device_map="auto",
-        quantization_config=None,      # ← disable any 4/8-bit loading
+        quantization_config=bnb_conf,    # ← 4-bit enabled
     )
 
-    # 3) fp16 on GPU if available
-    if torch.cuda.is_available():
-        model = model.half().cuda()
-
-    # 4) apply LoRA if provided
+    # ❷ Now apply your LoRA adapters and merge
     if lora_weights_path:
-        print(f"Applying LoRA weights from: {lora_weights_path}")
-        model = PeftModel.from_pretrained(
-            model,
-            lora_weights_path,
-            torch_dtype=torch.float16,
-        )
-        # merge adapters into base weights
+        model = PeftModel.from_pretrained(model, lora_weights_path, torch_dtype=torch.float16)
         model = model.merge_and_unload()
 
     return tokenizer, model
