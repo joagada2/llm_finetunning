@@ -94,7 +94,7 @@ def main():
     model.to(device)
     model.train()
 
-    # Load and tokenize dataset
+        # Load and tokenize dataset
     dataset = load_dataset('glue', 'sst2', split='train')
     tokenized = dataset.map(
         lambda ex: tokenize_function(ex, tokenizer),
@@ -102,8 +102,8 @@ def main():
         remove_columns=dataset.column_names  # drop original text columns so collator sees only tensors
     )
 
-        # Data loader
-        def collate_fn(batch):
+    # Data loader
+    def collate_fn(batch):
         # batch is a list of dicts with 'input_ids', 'attention_mask', 'labels'
         # Pad to max length without truncation parameter
         return tokenizer.pad(
@@ -112,7 +112,7 @@ def main():
             max_length=MAX_LENGTH,
             return_tensors='pt'
         )
-    dataloader = DataLoader(tokenized, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+    dataloader = DataLoader(tokenized, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)(tokenized, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
 
     # Optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
