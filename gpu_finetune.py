@@ -17,6 +17,25 @@ from transformers import (
     Trainer, TrainingArguments
 )
 from peft import LoraConfig, get_peft_model
+from datasets import load_dataset
+from transformers import TrainingArguments, Trainer, AutoTokenizer, AutoModelForSequenceClassification
+# … rest of your imports …
+
+
+# pick a guaranteed‐writable cache location (beside this script)
+BASE_DIR = Path(__file__).parent
+HF_CACHE = BASE_DIR / "hf_cache"
+
+# create subfolders
+for sub in ("transformers","datasets","metrics","hub"):
+    (HF_CACHE / sub).mkdir(parents=True, exist_ok=True)
+
+# redirect ALL HF caches
+os.environ["HF_HOME"]             = str(HF_CACHE / "hub")
+os.environ["TRANSFORMERS_CACHE"]  = str(HF_CACHE / "transformers")
+os.environ["HF_DATASETS_CACHE"]   = str(HF_CACHE / "datasets")
+os.environ["HF_METRICS_CACHE"]    = str(HF_CACHE / "metrics")
+os.environ["HF_HUB_CACHE"]        = str(HF_CACHE / "hub")
 
 # ── 0) HF cache + disable wandb ──────────────────────────────────────────────
 BASE = Path(__file__).parent
@@ -70,8 +89,10 @@ lora_cfg = LoraConfig(r=16, lora_alpha=32,
 model = get_peft_model(model, lora_cfg)
 
 # ── 3) Dataset Prep ─────────────────────────────────────────────────────────
-raw = load_dataset("json",
-    data_files={"train":str(train_file),"validation":str(valid_file)})
+raw = load_dataset(
+    "json",
+    data_files={"train": str(TRAIN_FILE), "validation": str(VALID_FILE)}
+)
 
 def prep(batch):
     toks = tokenizer(batch["sentence"],
