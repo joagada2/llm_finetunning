@@ -19,18 +19,24 @@ sys.modules['deepspeed.ops'] = deep_ops
 # Stub out Triton to prevent import errors on CPU-only nodes
 triton_mod = types.ModuleType('triton')
 triton_mod.Config = lambda *args, **kwargs: None
+# Provide a no-op jit decorator
+def _jit_decorator(*args, **kwargs):
+    def decorator(fn):
+        return fn
+    return decorator
+triton_mod.jit = _jit_decorator
+# Stub runtime.driver.active to an empty list
 triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[]))
 triton_mod.__spec__ = importlib.machinery.ModuleSpec('triton', None)
 sys.modules['triton'] = triton_mod
 
 # Stub Triton.language submodule
+import importlib
 tl_mod = types.ModuleType('triton.language')
 tl_mod.__spec__ = importlib.machinery.ModuleSpec('triton.language', None)
 # Provide constexpr so torchao intmm_triton imports succeed
 tl_mod.constexpr = lambda x: x
 sys.modules['triton.language'] = tl_mod
-# Stub Triton.jit to prevent attribute errors
-triton_mod.jit = types.SimpleNamespace()
 
 import os
 import torch
