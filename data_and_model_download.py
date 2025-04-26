@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from huggingface_hub import snapshot_download
 from datasets import load_dataset
 
 def download_model_and_dataset(
@@ -9,18 +9,20 @@ def download_model_and_dataset(
     dataset_name: str,
     dataset_config: str | None = None
 ):
-    # 1) Download the tokenizer
+    # 1) Download the tokenizer repo (files only)
     print(f"Downloading tokenizer for {model_name}...")
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
-        trust_remote_code=True,
+    tokenizer_cache = snapshot_download(
+        repo_id=model_name,
+        subfolder="tokenizer",
+        use_auth_token=os.getenv("HF_TOKEN"),
     )
 
-    # 2) Download the model (fp16/fp32)
-    print(f"Downloading model {model_name} (fp16/fp32)...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        trust_remote_code=True,
+    # 2) Download the model repo (files only)
+    print(f"Downloading model repository {model_name}...")
+    model_cache = snapshot_download(
+        repo_id=model_name,
+        subfolder=None,
+        use_auth_token=os.getenv("HF_TOKEN"),
     )
 
     # 3) Download the dataset
@@ -31,9 +33,10 @@ def download_model_and_dataset(
     else:
         dataset = load_dataset(dataset_name)
 
-    print("✅ Done!")
-    return tokenizer, model, dataset
-
+    print("✅ Files downloaded (model & dataset). \n" \
+          f"Tokenizer files in: {tokenizer_cache}\n" \
+          f"Model files in: {model_cache}")
+    return tokenizer_cache, model_cache, dataset
 
 if __name__ == "__main__":
     # Set defaults or override via environment
