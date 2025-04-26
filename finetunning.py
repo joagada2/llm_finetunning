@@ -80,13 +80,17 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Using device:", device)
 
-    # 2) Load model and tokenizer
-    model_name = os.getenv("BASE_MODEL", "EleutherAI/gpt-neo-1.3B")
+        # 2) Select model based on available resources
+    if not torch.cuda.is_available():
+        print("No GPU detected – switching to a lightweight CPU-friendly model: distilgpt2")
+        model_name = "distilgpt2"
+    else:
+        model_name = os.getenv("BASE_MODEL", "EleutherAI/gpt-neo-1.3B")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.add_special_tokens({'pad_token': tokenizer.eos_token})
 
-    model = AutoModelForCausalLM.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)(model_name)
     # Disable use_cache to prevent 4D causal mask issues during training
     model.config.use_cache = False
     model.to(device)
