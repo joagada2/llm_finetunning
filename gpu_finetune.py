@@ -20,14 +20,11 @@ from transformers import (
 )
 from peft import LoraConfig, get_peft_model
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 0) Redirect ALL HF caches to ./hf_cache before any HF imports
-# ────────────────────────────────────────────────────────────────────────────────
+# 0) Redirect ALL HF caches
 BASE = Path(__file__).parent
 HF_CACHE = BASE / "hf_cache"
 for sub in ("hub", "transformers", "datasets", "metrics"):
     (HF_CACHE / sub).mkdir(parents=True, exist_ok=True)
-
 os.environ.update({
     "HF_HOME":            str(HF_CACHE / "hub"),
     "TRANSFORMERS_CACHE": str(HF_CACHE / "transformers"),
@@ -35,9 +32,7 @@ os.environ.update({
     "HF_METRICS_CACHE":   str(HF_CACHE / "metrics"),
 })
 
-# ────────────────────────────────────────────────────────────────────────────────
 # 1) Paths & seed
-# ────────────────────────────────────────────────────────────────────────────────
 set_seed(42)
 DATA_ROOT  = BASE / "finetune_data"
 MODEL_DIR  = DATA_ROOT / "model"
@@ -45,16 +40,13 @@ TRAIN_FILE = DATA_ROOT / "train.jsonl"
 VALID_FILE = DATA_ROOT / "validation.jsonl"
 MAX_LEN    = 128
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 2) Optional DeepSpeed config (only if installed)
-# ────────────────────────────────────────────────────────────────────────────────
+# 2) Optional DeepSpeed
 use_deepspeed = False
 try:
     import deepspeed  # noqa: F401
     use_deepspeed = True
 except ImportError:
     print(">>> DeepSpeed not found; skipping ZeRO offload.")
-
 ds_config_path = None
 if use_deepspeed:
     ds_conf = {
@@ -70,11 +62,9 @@ if use_deepspeed:
     ds_config_path = BASE / "ds_config.json"
     with open(ds_config_path, "w") as f:
         json.dump(ds_conf, f, indent=2)
-    print(f">>> DeepSpeed config written to {ds_config_path}")
+    print(f">>> DeepSpeed config at {ds_config_path}")
 
-# ────────────────────────────────────────────────────────────────────────────────
 # 3) Load & patch tokenizer + model
-# ────────────────────────────────────────────────────────────────────────────────
 tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, use_fast=True)
 tokenizer.pad_token = tokenizer.eos_token
 
@@ -83,10 +73,12 @@ model = AutoModelForSequenceClassification.from_pretrained(
     num_labels=2,
     ignore_mismatched_sizes=True,
 )
+# ensure caching disabled
+model.config.use_cache = False
 model.config.pad_token_id = tokenizer.eos_token_id
 model.resize_token_embeddings(len(tokenizer))
 
-# Apply LoRA on NeoX modules
+# LoRA on NeoX modules
 lora_cfg = LoraConfig(
     r=16,
     lora_alpha=32,
@@ -94,9 +86,7 @@ lora_cfg = LoraConfig(
 )
 model = get_peft_model(model, lora_cfg)
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 4) Dataset preparation
-# ────────────────────────────────────────────────────────────────────────────────
+# 4) Dataset prep
 raw = load_dataset(
     "json",
     data_files={"train": str(TRAIN_FILE), "validation": str(VALID_FILE)},
@@ -121,16 +111,12 @@ tokenized = raw.map(
 )
 tokenized.set_format("torch", columns=["input_ids", "attention_mask", "labels"])
 
-# ────────────────────────────────────────────────────────────────────────────────
 # 5) Metrics
-# ────────────────────────────────────────────────────────────────────────────────
 def compute_metrics(pred):
     preds = np.argmax(pred.predictions, axis=-1)
     return {"accuracy": accuracy_score(pred.label_ids, preds)}
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 6) TrainingArguments (legacy style, with report_to=[] to disable W&B)
-# ────────────────────────────────────────────────────────────────────────────────
+# 6) TrainingArguments (legacy, no gradient_checkpointing)
 training_args_kwargs = dict(
     output_dir="gpu_finetuned_complete",
     logging_dir="logs_complete",
@@ -140,24 +126,19 @@ training_args_kwargs = dict(
     learning_rate=2e-5,
     weight_decay=0.01,
     fp16=True,
-    gradient_checkpointing=True,
     logging_steps=50,
     eval_steps=500,
     save_steps=500,
     save_total_limit=2,
-    report_to=[],  # disables all experiment tracking
+    report_to=[],  # disable W&B
 )
-
 if use_deepspeed:
     training_args_kwargs["deepspeed"] = str(ds_config_path)
-
 training_args = TrainingArguments(**training_args_kwargs)
 
 from transformers import Trainer as HfTrainer
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 7) Custom Trainer to handle “labels” and extra kwargs in compute_loss
-# ────────────────────────────────────────────────────────────────────────────────
+# 7) Custom Trainer to handle labels
 class MyTrainer(HfTrainer):
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.pop("labels")
@@ -165,9 +146,6 @@ class MyTrainer(HfTrainer):
         loss = outputs.loss
         return (loss, outputs) if return_outputs else loss
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 8) Instantiate Trainer
-# ────────────────────────────────────────────────────────────────────────────────
 trainer = MyTrainer(
     model=model,
     args=training_args,
@@ -177,12 +155,10 @@ trainer = MyTrainer(
     compute_metrics=compute_metrics,
 )
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 9) Train & evaluate
-# ────────────────────────────────────────────────────────────────────────────────
+# 8) Train & evaluate
 if __name__ == "__main__":
     trainer.train()
-    print(">> Running final evaluation")
+    print(">> final evaluation")
     metrics = trainer.evaluate(eval_dataset=tokenized["validation"])
     print("Validation metrics:", metrics)
     trainer.save_model("gpu_finetuned_complete/final")
