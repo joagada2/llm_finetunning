@@ -7,7 +7,6 @@ import importlib.machinery
 # Stub out deepspeed to prevent import errors on CPU-only nodes
 deep_pkg = types.ModuleType('deepspeed')
 deep_pkg.__spec__ = importlib.machinery.ModuleSpec('deepspeed', None)
-# Stub deepspeed.ops subpackage
 deep_ops = types.ModuleType('deepspeed.ops')
 deep_ops.__spec__ = importlib.machinery.ModuleSpec('deepspeed.ops', None)
 deep_pkg.ops = deep_ops
@@ -21,7 +20,7 @@ triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[
 triton_mod.__spec__ = importlib.machinery.ModuleSpec('triton', None)
 sys.modules['triton'] = triton_mod
 
-# Stub out torchao to prevent import errors on CPU-only nodes
+# Stub out torchao and submodules to prevent import errors
 torchao_mod = types.ModuleType('torchao')
 torchao_mod.__spec__ = importlib.machinery.ModuleSpec('torchao', None)
 kernel_mod = types.ModuleType('torchao.kernel')
@@ -30,7 +29,7 @@ kernel_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.kernel', None)
 sys.modules['torchao'] = torchao_mod
 sys.modules['torchao.kernel'] = kernel_mod
 
-# Stub out torchao.float8 and its submodule float8_linear
+# Stub torchao.float8 and float8_linear
 float8_pkg = types.ModuleType('torchao.float8')
 float8_pkg.__spec__ = importlib.machinery.ModuleSpec('torchao.float8', None)
 float8_linear_mod = types.ModuleType('torchao.float8.float8_linear')
@@ -40,7 +39,7 @@ float8_linear_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.float8.floa
 sys.modules['torchao.float8'] = float8_pkg
 sys.modules['torchao.float8.float8_linear'] = float8_linear_mod
 
-# Stub out torchao.quantization and Int4WeightOnlyConfig
+# Stub torchao.quantization
 quant_mod = types.ModuleType('torchao.quantization')
 quant_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.quantization', None)
 class Int4WeightOnlyConfig: pass
@@ -50,12 +49,9 @@ sys.modules['torchao.quantization'] = quant_mod
 import torch
 from torch.utils.data import DataLoader
 from datasets import load_dataset
-from transformers import (
-    AutoTokenizer,
-    AutoModelForCausalLM
-)
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-# Hyperparameters
+# Hyperparameters from environment or defaults
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", 4))
 EPOCHS = int(os.getenv("EPOCHS", 1))
 LR = float(os.getenv("LEARNING_RATE", 2e-4))
@@ -64,7 +60,7 @@ GRAD_ACC_STEPS = int(os.getenv("GRAD_ACC_STEPS", 1))
 LOGGING_STEPS = int(os.getenv("LOGGING_STEPS", 10))
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "./finetuned-model")
 
-# Tokenization
+# Tokenize a single example for supervised fine-tuning
 def tokenize_function(example, tokenizer):
     prompt = f"Review: {example['sentence']} Sentiment:"
     label_text = " Positive" if example['label'] == 1 else " Negative"
@@ -78,13 +74,13 @@ def tokenize_function(example, tokenizer):
     encoded['labels'] = encoded['input_ids'].clone()
     return encoded
 
-# Training loop
+# Main training loop
 def main():
-    # Device
+    # 1) Device setup
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Using device:", device)
 
-    # Load model & tokenizer
+    # 2) Load model and tokenizer
     model_name = os.getenv("BASE_MODEL", "EleutherAI/gpt-neo-1.3B")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
@@ -94,37 +90,35 @@ def main():
     model.to(device)
     model.train()
 
-        # Load and tokenize dataset
-    dataset = load_dataset('glue', 'sst2', split='train')
+    # 3) Load and tokenize dataset
+dataset = load_dataset('glue', 'sst2', split='train')
     tokenized = dataset.map(
         lambda ex: tokenize_function(ex, tokenizer),
         batched=False,
-        remove_columns=dataset.column_names  # drop original text columns so collator sees only tensors
+        remove_columns=dataset.column_names
     )
 
-    # Data loader
+    # 4) DataLoader with padding collate
     def collate_fn(batch):
-        # batch is a list of dicts with 'input_ids', 'attention_mask', 'labels'
-        # Pad to max length without truncation parameter
         return tokenizer.pad(
             batch,
             padding=True,
             max_length=MAX_LENGTH,
             return_tensors='pt'
         )
-    dataloader = DataLoader(tokenized, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)(tokenized, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+    dataloader = DataLoader(tokenized, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
 
-    # Optimizer
+    # 5) Optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
 
-    # Training
+    # 6) Training loop with gradient accumulation
     global_step = 0
     for epoch in range(EPOCHS):
         for step, batch in enumerate(dataloader):
+            # Move to device
             batch = {k: v.to(device) for k, v in batch.items()}
             outputs = model(**batch)
-            loss = outputs.loss
-            loss = loss / GRAD_ACC_STEPS
+            loss = outputs.loss / GRAD_ACC_STEPS
             loss.backward()
 
             if (step + 1) % GRAD_ACC_STEPS == 0:
@@ -134,7 +128,7 @@ def main():
                 if global_step % LOGGING_STEPS == 0:
                     print(f"Epoch {epoch} | Step {global_step} | Loss: {loss.item() * GRAD_ACC_STEPS:.4f}")
 
-    # Save model
+    # 7) Save fine-tuned model and tokenizer
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     model.save_pretrained(OUTPUT_DIR)
     tokenizer.save_pretrained(OUTPUT_DIR)
