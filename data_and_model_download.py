@@ -20,7 +20,7 @@ from transformers import (
 )
 
 # ── CONFIG ───────────────────────────────────────────────────────────────────
-MODEL_ID="meta-llama/Llama-2-7b-hf"
+MODEL_ID="meta-llama/Llama-2-7b"
 DATA_NAME   = "glue"
 DATA_CONFIG = "sst2"
 OUT_ROOT    = Path("finetune_data")
