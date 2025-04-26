@@ -2,17 +2,22 @@
 import os
 import sys
 import types
+import importlib.machinery
 
 # Stub out Triton to avoid driver errors on CPU-only nodes
 triton_mod = types.ModuleType('triton')
 triton_mod.Config = lambda *args, **kwargs: None
 triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[]))
+# Provide a valid __spec__ so import_utils.find_spec sees the module
+triton_mod.__spec__ = importlib.machinery.ModuleSpec('triton', None)
 sys.modules['triton'] = triton_mod
 
 # Stub out torchao to prevent import errors on CPU-only nodes
 torchao_mod = types.ModuleType('torchao')
+torchao_mod.__spec__ = importlib.machinery.ModuleSpec('torchao', None)
 kernel_mod = types.ModuleType('torchao.kernel')
 kernel_mod.intmm_triton = lambda *args, **kwargs: None
+kernel_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.kernel', None)
 sys.modules['torchao'] = torchao_mod
 sys.modules['torchao.kernel'] = kernel_mod
 
