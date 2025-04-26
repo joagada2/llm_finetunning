@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 import os
+import sys
+import types
+
+# Stub out Triton to avoid driver errors on CPU-only nodes
+if 'triton' not in sys.modules:
+    triton_mod = types.ModuleType('triton')
+    # provide minimal API expected by transformers
+    triton_mod.Config = lambda *args, **kwargs: None
+    triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[]))
+    sys.modules['triton'] = triton_mod
+
 import torch
 from torch.utils.data import DataLoader
 from datasets import load_dataset
@@ -14,11 +25,12 @@ BATCH_SIZE = int(os.getenv("BATCH_SIZE", 4))
 EPOCHS = int(os.getenv("EPOCHS", 1))
 LR = float(os.getenv("LEARNING_RATE", 2e-4))
 MAX_LENGTH = int(os.getenv("MAX_LENGTH", 256))
-GRAD_ACC_STEPS = int(os.getenv("GRAD_ACC_STEPS", 4))
+GRAD_ACC_STEPS = int(os.getenv("GRAD_ACC_STEPS", 1))
 LOGGING_STEPS = int(os.getenv("LOGGING_STEPS", 10))
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "./finetuned-model")
 
 # Tokenization
+
 def tokenize_function(example, tokenizer):
     prompt = f"Review: {example['sentence']} Sentiment:"
     label_text = " Positive" if example['label'] == 1 else " Negative"
