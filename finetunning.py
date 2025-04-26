@@ -6,10 +6,10 @@ from transformers import (
     AutoModelForCausalLM,
     Trainer,
     TrainingArguments,
-    BitsAndBytesConfig,
 )
-from peft import prepare_model_for_kbit_training, LoraConfig, get_peft_model
+from peft import LoraConfig, get_peft_model
 from datasets import load_dataset
+
 
 def tokenize_function(example, tokenizer):
     prompt = f"Review: {example['sentence']} Sentiment:"
@@ -23,10 +23,11 @@ def tokenize_function(example, tokenizer):
     result["labels"] = result["input_ids"].copy()
     return result
 
+
 def main():
-    model_name   = "Qwen/Qwen1.5-7B-Chat"
+    model_name = "Qwen/Qwen1.5-7B-Chat"
     dataset_name = "glue"
-    subset_name  = "sst2"
+    subset_name = "sst2"
 
     # 1) Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
@@ -34,21 +35,17 @@ def main():
         trust_remote_code=True,
     )
 
-    # 2) Load model with NO bitsandbytes quantization
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=False,
-        load_in_8bit=False,
-    )
+    # 2) Load model (FP16/FP32) without bitsandbytes
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         trust_remote_code=True,
         device_map="auto",
-        quantization_config=bnb_config,
     )
+    # Move model to GPU/accelerator if available
+    if torch.cuda.is_available():
+        model.half().cuda()
 
-    # 3) Prepare model for k-bit (LoRA) training
-    model = prepare_model_for_kbit_training(model)
-
+    # 3) Apply LoRA adapters
     lora_config = LoraConfig(
         r=8,
         lora_alpha=16,
@@ -66,10 +63,10 @@ def main():
         batched=False,
     )
 
-    # 5) Split for eval
+    # 5) Split for evaluation
     split = tokenized.train_test_split(test_size=0.1)
 
-    # 6) Training args
+    # 6) Training arguments
     training_args = TrainingArguments(
         output_dir="./qwen2.5_sst2_lora",
         evaluation_strategy="steps",
@@ -81,12 +78,12 @@ def main():
         learning_rate=2e-4,
         logging_steps=10,
         save_strategy="epoch",
-        bf16=True,
+        bf16=torch.cuda.is_available(),  # use bf16 if GPU supports it
         save_total_limit=1,
         report_to="none",
     )
 
-    # 7) Trainer & train
+    # 7) Trainer & start training
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -94,6 +91,7 @@ def main():
         eval_dataset=split["test"],
     )
     trainer.train()
+
 
 if __name__ == "__main__":
     main()
