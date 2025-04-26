@@ -91,35 +91,23 @@ training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
     num_train_epochs=3,
     per_device_train_batch_size=8,
-    per_device_eval_batch_size=8,
     learning_rate=2e-5,
     weight_decay=0.01,
-
-    # legacy evaluation & saving
-    evaluate_during_training=True,  # instead of evaluation_strategy
-    logging_steps=50,
-    eval_steps=500,
-    save_steps=500,
-    save_total_limit=2,
-
-    load_best_model_at_end=True,
-    metric_for_best_model="accuracy",
-
     logging_dir=LOG_DIR,
+    logging_steps=50,
+    save_total_limit=2,
 )
 
-# ── Trainer ──────────────────────────────────────────────────────────────────
 trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=tokenized["train"],
-    eval_dataset=tokenized["validation"],
     tokenizer=tokenizer,
-    compute_metrics=compute_metrics,
 )
 
-# ── Train ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     trainer.train()
-    trainer.save_model(f"{OUTPUT_DIR}/best")
-    print(f"✅ Fine-tuning complete. Best model saved to {OUTPUT_DIR}/best")
+    # Manually evaluate:
+    metrics = trainer.evaluate(eval_dataset=tokenized["validation"])
+    print("Validation metrics:", metrics)
+    trainer.save_model(f"{OUTPUT_DIR}/final")
