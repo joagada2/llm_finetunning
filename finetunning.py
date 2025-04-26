@@ -4,12 +4,17 @@ import sys
 import types
 
 # Stub out Triton to avoid driver errors on CPU-only nodes
-if 'triton' not in sys.modules:
-    triton_mod = types.ModuleType('triton')
-    # provide minimal API expected by transformers
-    triton_mod.Config = lambda *args, **kwargs: None
-    triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[]))
-    sys.modules['triton'] = triton_mod
+triton_mod = types.ModuleType('triton')
+triton_mod.Config = lambda *args, **kwargs: None
+triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[]))
+sys.modules['triton'] = triton_mod
+
+# Stub out torchao to prevent import errors on CPU-only nodes
+torchao_mod = types.ModuleType('torchao')
+kernel_mod = types.ModuleType('torchao.kernel')
+kernel_mod.intmm_triton = lambda *args, **kwargs: None
+sys.modules['torchao'] = torchao_mod
+sys.modules['torchao.kernel'] = kernel_mod
 
 import torch
 from torch.utils.data import DataLoader
