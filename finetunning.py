@@ -23,9 +23,10 @@ def tokenize_function(example, tokenizer):
     return result
 
 def main():
-    model_name = "Qwen/Qwen1.5-7B-Chat"
+    # Change here to the LLaMA-2 model you prefer
+    model_name   = "meta-llama/Llama-2-7b-chat-hf"
     dataset_name = "glue"
-    subset_name = "sst2"
+    subset_name  = "sst2"
 
     # 1) Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
@@ -33,14 +34,14 @@ def main():
         trust_remote_code=True,
     )
 
-    # 2) Load model (FP16/FP32) without bitsandbytes
+    # 2) Load model in FP16/FP32
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         trust_remote_code=True,
         device_map="auto",
     )
     if torch.cuda.is_available():
-        model.half().cuda()
+        model = model.half().cuda()
 
     # 3) Apply LoRA adapters
     lora_config = LoraConfig(
@@ -65,7 +66,7 @@ def main():
 
     # 6) Training arguments
     training_args = TrainingArguments(
-        output_dir="./qwen2.5_sst2_lora",
+        output_dir="./llama2-7b-sst2-lora",
         do_eval=True,
         eval_steps=50,
         per_device_train_batch_size=2,
