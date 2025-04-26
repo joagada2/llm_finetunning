@@ -78,9 +78,11 @@ model.resize_token_embeddings(len(tokenizer))
 
 # apply LoRA (PEFT)
 lora_cfg = LoraConfig(
-    r=16, lora_alpha=32,
-    target_modules=["q_proj","v_proj","k_proj","o_proj"]
+    r=16,
+    lora_alpha=32,
+    target_modules=["query_key_value", "dense"]
 )
+
 model = get_peft_model(model, lora_cfg)
 
 # ── 4) Prepare & tokenize dataset ────────────────────────────────────────────
