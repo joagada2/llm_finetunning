@@ -20,6 +20,10 @@ kernel_mod.intmm_triton = lambda *args, **kwargs: None
 kernel_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.kernel', None)
 sys.modules['torchao'] = torchao_mod
 sys.modules['torchao.kernel'] = kernel_mod
+# Stub out torchao.float8 since transformers checks for it
+float8_mod = types.ModuleType('torchao.float8')
+float8_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.float8', None)
+sys.modules['torchao.float8'] = float8_mod
 
 import torch
 from torch.utils.data import DataLoader
