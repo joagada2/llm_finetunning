@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+import types
+import importlib.machinery
+# Stub out deepspeed to prevent import errors on CPU-only nodes
+deep_pkg = types.ModuleType('deepspeed')
+deep_pkg.__spec__ = importlib.machinery.ModuleSpec('deepspeed', None)
+# Stub deepspeed.ops subpackage
+deep_ops = types.ModuleType('deepspeed.ops')
+deep_ops.__spec__ = importlib.machinery.ModuleSpec('deepspeed.ops', None)
+deep_pkg.ops = deep_ops
+sys.modules['deepspeed'] = deep_pkg
+sys.modules['deepspeed.ops'] = deep_ops
+
 import os
 import sys
 import types
