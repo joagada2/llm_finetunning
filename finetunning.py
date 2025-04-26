@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+import os
+import sys
 import types
 import importlib.machinery
+
 # Stub out deepspeed to prevent import errors on CPU-only nodes
 deep_pkg = types.ModuleType('deepspeed')
 deep_pkg.__spec__ = importlib.machinery.ModuleSpec('deepspeed', None)
@@ -11,16 +14,10 @@ deep_pkg.ops = deep_ops
 sys.modules['deepspeed'] = deep_pkg
 sys.modules['deepspeed.ops'] = deep_ops
 
-import os
-import sys
-import types
-import importlib.machinery
-
 # Stub out Triton to avoid driver errors on CPU-only nodes
 triton_mod = types.ModuleType('triton')
 triton_mod.Config = lambda *args, **kwargs: None
 triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[]))
-# Provide a valid __spec__ so import_utils.find_spec sees the module
 triton_mod.__spec__ = importlib.machinery.ModuleSpec('triton', None)
 sys.modules['triton'] = triton_mod
 
@@ -32,14 +29,12 @@ kernel_mod.intmm_triton = lambda *args, **kwargs: None
 kernel_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.kernel', None)
 sys.modules['torchao'] = torchao_mod
 sys.modules['torchao.kernel'] = kernel_mod
+
 # Stub out torchao.float8 and its submodule float8_linear
 float8_pkg = types.ModuleType('torchao.float8')
 float8_pkg.__spec__ = importlib.machinery.ModuleSpec('torchao.float8', None)
-# Create submodule torchao.float8.float8_linear
 float8_linear_mod = types.ModuleType('torchao.float8.float8_linear')
-# Define stub class expected by accelerate
-class Float8LinearConfig:
-    pass
+class Float8LinearConfig: pass
 float8_linear_mod.Float8LinearConfig = Float8LinearConfig
 float8_linear_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.float8.float8_linear', None)
 sys.modules['torchao.float8'] = float8_pkg
@@ -48,8 +43,7 @@ sys.modules['torchao.float8.float8_linear'] = float8_linear_mod
 # Stub out torchao.quantization and Int4WeightOnlyConfig
 quant_mod = types.ModuleType('torchao.quantization')
 quant_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.quantization', None)
-class Int4WeightOnlyConfig:
-    pass
+class Int4WeightOnlyConfig: pass
 quant_mod.Int4WeightOnlyConfig = Int4WeightOnlyConfig
 sys.modules['torchao.quantization'] = quant_mod
 
@@ -72,7 +66,6 @@ LOGGING_STEPS = int(os.getenv("LOGGING_STEPS", 10))
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "./finetuned-model")
 
 # Tokenization
-
 def tokenize_function(example, tokenizer):
     prompt = f"Review: {example['sentence']} Sentiment:"
     label_text = " Positive" if example['label'] == 1 else " Negative"
