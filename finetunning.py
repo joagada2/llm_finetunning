@@ -23,6 +23,13 @@ def tokenize_function(example, tokenizer):
     return result
 
 def main():
+    # Check GPU availability
+    print("CUDA available? ", torch.cuda.is_available())
+    print("CUDA device count: ", torch.cuda.device_count())
+    if torch.cuda.is_available():
+        print("CUDA device name: ", torch.cuda.get_device_name(0))
+    else:
+        print("No CUDA devices found. Training will run on CPU.")
     # Change here to the LLaMA-2 model you prefer
     model_name   = "meta-llama/Llama-2-7b-chat-hf"
     dataset_name = "glue"
