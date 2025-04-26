@@ -29,7 +29,7 @@ kernel_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.kernel', None)
 sys.modules['torchao'] = torchao_mod
 sys.modules['torchao.kernel'] = kernel_mod
 
-# Stub torchao.float8 and float8_linear
+# Stub out torchao.float8 and float8_linear
 float8_pkg = types.ModuleType('torchao.float8')
 float8_pkg.__spec__ = importlib.machinery.ModuleSpec('torchao.float8', None)
 float8_linear_mod = types.ModuleType('torchao.float8.float8_linear')
@@ -39,7 +39,7 @@ float8_linear_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.float8.floa
 sys.modules['torchao.float8'] = float8_pkg
 sys.modules['torchao.float8.float8_linear'] = float8_linear_mod
 
-# Stub torchao.quantization
+# Stub out torchao.quantization
 quant_mod = types.ModuleType('torchao.quantization')
 quant_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.quantization', None)
 class Int4WeightOnlyConfig: pass
@@ -91,7 +91,7 @@ def main():
     model.train()
 
     # 3) Load and tokenize dataset
-dataset = load_dataset('glue', 'sst2', split='train')
+    dataset = load_dataset('glue', 'sst2', split='train')
     tokenized = dataset.map(
         lambda ex: tokenize_function(ex, tokenizer),
         batched=False,
