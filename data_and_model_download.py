@@ -2,12 +2,31 @@
 import sys
 import types
 import importlib.machinery
+
+# Stub out deepspeed to prevent import errors on CPU-only nodes
+deep_pkg = types.ModuleType('deepspeed')
+deep_pkg.__spec__ = importlib.machinery.ModuleSpec('deepspeed', None)
+# Dummy DeepSpeedEngine so imports in modeling_utils pass
+class DeepSpeedEngine: pass
+deep_pkg.DeepSpeedEngine = DeepSpeedEngine
+# Stub deepspeed.ops subpackage
+deep_ops = types.ModuleType('deepspeed.ops')
+deep_ops.__spec__ = importlib.machinery.ModuleSpec('deepspeed.ops', None)
+deep_pkg.ops = deep_ops
+sys.modules['deepspeed'] = deep_pkg
+sys.modules['deepspeed.ops'] = deep_ops
+
 # Stub out Triton to prevent import errors on CPU-only nodes
 triton_mod = types.ModuleType('triton')
 triton_mod.Config = lambda *args, **kwargs: None
 triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[]))
 triton_mod.__spec__ = importlib.machinery.ModuleSpec('triton', None)
 sys.modules['triton'] = triton_mod
+
+# Stub Triton.language submodule
+tl_mod = types.ModuleType('triton.language')
+tl_mod.__spec__ = importlib.machinery.ModuleSpec('triton.language', None)
+sys.modules['triton.language'] = tl_mod
 
 import os
 import torch
