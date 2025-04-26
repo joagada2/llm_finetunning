@@ -27,6 +27,8 @@ sys.modules['triton'] = triton_mod
 tl_mod = types.ModuleType('triton.language')
 tl_mod.__spec__ = importlib.machinery.ModuleSpec('triton.language', None)
 sys.modules['triton.language'] = tl_mod
+# Stub Triton.jit to prevent attribute errors
+triton_mod.jit = types.SimpleNamespace()
 
 import os
 import torch
