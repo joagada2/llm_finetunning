@@ -40,7 +40,8 @@ if __name__ == "__main__":
     #  - LLaMA-2 7B chat:  "meta-llama/Llama-2-7b-chat-hf"
     #  - LLaMA-2 8B chat:  "meta-llama/Llama-2-8b-chat-hf"
     # model_name   = "meta-llama/Llama-2-7b-chat-hf"
-    model_name   = "EleutherAI/gpt-neo-1.3B"
+    # model_name   = "EleutherAI/gpt-neo-1.3B"
+    model_name = os.getenv("BASE_MODEL", "distilgpt2")
     dataset_name = "trl-lib/Capybara"
     dataset_cfg  = None     # e.g. "multiturn" if that HF dataset has a config
 
