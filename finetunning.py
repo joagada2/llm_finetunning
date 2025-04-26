@@ -10,7 +10,6 @@ from transformers import (
 from peft import LoraConfig, get_peft_model
 from datasets import load_dataset
 
-
 def tokenize_function(example, tokenizer):
     prompt = f"Review: {example['sentence']} Sentiment:"
     label_text = " Positive" if example['label'] == 1 else " Negative"
@@ -22,7 +21,6 @@ def tokenize_function(example, tokenizer):
     )
     result["labels"] = result["input_ids"].copy()
     return result
-
 
 def main():
     model_name = "Qwen/Qwen1.5-7B-Chat"
@@ -41,7 +39,6 @@ def main():
         trust_remote_code=True,
         device_map="auto",
     )
-    # Move model to GPU/accelerator if available
     if torch.cuda.is_available():
         model.half().cuda()
 
@@ -69,7 +66,7 @@ def main():
     # 6) Training arguments
     training_args = TrainingArguments(
         output_dir="./qwen2.5_sst2_lora",
-        evaluation_strategy="steps",
+        do_eval=True,
         eval_steps=50,
         per_device_train_batch_size=2,
         per_device_eval_batch_size=2,
@@ -78,7 +75,7 @@ def main():
         learning_rate=2e-4,
         logging_steps=10,
         save_strategy="epoch",
-        bf16=torch.cuda.is_available(),  # use bf16 if GPU supports it
+        bf16=torch.cuda.is_available(),
         save_total_limit=1,
         report_to="none",
     )
@@ -91,7 +88,6 @@ def main():
         eval_dataset=split["test"],
     )
     trainer.train()
-
 
 if __name__ == "__main__":
     main()
