@@ -1,64 +1,88 @@
-import torch
+#!/usr/bin/env python3
 import os
-from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from peft import PeftModel
 
-def get_latest_checkpoint(output_dir):
-    checkpoints = [f for f in os.listdir(output_dir) if f.startswith("checkpoint-")]
+def get_latest_checkpoint(output_dir: str) -> str:
+    checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
     if not checkpoints:
         raise ValueError(f"No checkpoints found in {output_dir}")
     checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[-1]))
-    latest_checkpoint = os.path.join(output_dir, checkpoints[-1])
-    print(f"Latest checkpoint found: {latest_checkpoint}")
-    return latest_checkpoint
+    latest = os.path.join(output_dir, checkpoints[-1])
+    print(f"Latest checkpoint found: {latest}")
+    return latest
 
-def load_model(base_model_name, lora_weights_path=None):
+def load_model(
+    base_model_name: str,
+    lora_weights_path: str | None = None
+):
     print(f"Loading base model: {base_model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(base_model_name, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
+    # 1) tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
         base_model_name,
-        device_map="auto",
         trust_remote_code=True,
-        load_in_4bit=True
     )
 
+    # 2) base model (no bnb quant)
+    model = AutoModelForCausalLM.from_pretrained(
+        base_model_name,
+        trust_remote_code=True,
+        device_map="auto",
+        quantization_config=None,      # ← disable any 4/8-bit loading
+    )
+
+    # 3) fp16 on GPU if available
+    if torch.cuda.is_available():
+        model = model.half().cuda()
+
+    # 4) apply LoRA if provided
     if lora_weights_path:
         print(f"Applying LoRA weights from: {lora_weights_path}")
-        model = PeftModel.from_pretrained(model, lora_weights_path)
+        model = PeftModel.from_pretrained(
+            model,
+            lora_weights_path,
+            torch_dtype=torch.float16,
+        )
+        # merge adapters into base weights
         model = model.merge_and_unload()
 
     return tokenizer, model
 
-def predict_sentiment(text, tokenizer, model):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = model.to(device)
+def predict_sentiment(
+    text: str,
+    tokenizer: AutoTokenizer,
+    model: AutoModelForCausalLM,
+    max_new_tokens: int = 10
+) -> str:
+    device = model.device
     inputs = tokenizer(f"Review: {text} Sentiment:", return_tensors="pt").to(device)
-    outputs = model.generate(**inputs, max_new_tokens=10)
+    outputs = model.generate(**inputs, max_new_tokens=max_new_tokens)
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 def main():
     base_model_name = "Qwen/Qwen1.5-7B-Chat"
-    output_dir = "./qwen2.5_sst2_lora"
+    output_dir      = "./qwen2.5_sst2_lora"
 
     example_texts = [
         "The movie was terrible and boring.",
         "I absolutely loved the acting and the storyline!",
     ]
 
-    # Before Finetuning
+    # --- Before fine-tuning ---
     print("=== Base Model Predictions ===")
     tokenizer, model = load_model(base_model_name)
-    for text in example_texts:
-        print(f"Input: {text}")
-        print(f"Output: {predict_sentiment(text, tokenizer, model)}\n")
+    for txt in example_texts:
+        print(f"Input:  {txt}")
+        print(f"Output: {predict_sentiment(txt, tokenizer, model)}\n")
 
-    # After Finetuning
-    print("\n=== Finetuned Model Predictions ===")
-    latest_checkpoint = get_latest_checkpoint(output_dir)
-    tokenizer, model = load_model(base_model_name, lora_weights_path=latest_checkpoint)
-    for text in example_texts:
-        print(f"Input: {text}")
-        print(f"Output: {predict_sentiment(text, tokenizer, model)}\n")
+    # --- After fine-tuning ---
+    print("=== Fine-Tuned Model Predictions ===")
+    ckpt = get_latest_checkpoint(output_dir)
+    tokenizer_ft, model_ft = load_model(base_model_name, lora_weights_path=ckpt)
+    for txt in example_texts:
+        print(f"Input:  {txt}")
+        print(f"Output: {predict_sentiment(txt, tokenizer_ft, model_ft)}\n")
 
 if __name__ == "__main__":
     main()
