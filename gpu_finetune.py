@@ -161,6 +161,7 @@ trainer = Trainer(
     eval_dataset=tokenized["validation"],
     tokenizer=tokenizer,
     compute_metrics=compute_metrics,
+    label_names=["labels"],
 )
 
 # ────────────────────────────────────────────────────────────────────────────────
