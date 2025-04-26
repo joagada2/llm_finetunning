@@ -41,7 +41,6 @@ def main():
 
     # Model and dataset config
     model_name   = os.getenv("BASE_MODEL", "EleutherAI/gpt-neo-1.3B")
-    # model_name   = os.getenv("BASE_MODEL", "meta-llama/Llama-2-7b-chat-hf")
     dataset_name = "glue"
     subset_name  = "sst2"
 
@@ -50,11 +49,14 @@ def main():
         tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             trust_remote_code=True,
-            use_auth_token=hf_token,
+            token=hf_token,
         )
     except Exception as e:
         print(f"Error loading tokenizer for {model_name}: {e}", file=sys.stderr)
         sys.exit(1)
+    # Ensure a pad token exists
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
     # 2) Load model
     try:
@@ -62,7 +64,7 @@ def main():
             model_name,
             trust_remote_code=True,
             device_map="auto",
-            use_auth_token=hf_token,
+            token=hf_token,
         )
     except Exception as e:
         print(f"Error loading model {model_name}: {e}", file=sys.stderr)
@@ -94,7 +96,7 @@ def main():
 
     # 6) Training arguments
     training_args = TrainingArguments(
-        output_dir="./llama2-7b-sst2-lora",
+        output_dir="./gpt-neo-1.3B-sst2-lora",
         do_eval=True,
         eval_steps=50,
         per_device_train_batch_size=2,
