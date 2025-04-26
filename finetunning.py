@@ -14,15 +14,14 @@ from pathlib import Path
 # ── 0) Redirect all HF caches to a local hf_cache folder ────────────────────
 BASE_PATH = Path(__file__).parent
 HF_CACHE  = BASE_PATH / "hf_cache"
-# Subfolders for each cache type
 for sub in ("transformers","datasets","metrics","hub"):
     (HF_CACHE / sub).mkdir(parents=True, exist_ok=True)
 
-os.environ["HF_HOME"]             = str(HF_CACHE / "hub")
-os.environ["TRANSFORMERS_CACHE"]  = str(HF_CACHE / "transformers")
-os.environ["HF_DATASETS_CACHE"]   = str(HF_CACHE / "datasets")
-os.environ["HF_METRICS_CACHE"]    = str(HF_CACHE / "metrics")
-os.environ["HF_HUB_CACHE"]        = str(HF_CACHE / "hub")
+os.environ["HF_HOME"]            = str(HF_CACHE / "hub")
+os.environ["TRANSFORMERS_CACHE"] = str(HF_CACHE / "transformers")
+os.environ["HF_DATASETS_CACHE"]  = str(HF_CACHE / "datasets")
+os.environ["HF_METRICS_CACHE"]   = str(HF_CACHE / "metrics")
+os.environ["HF_HUB_CACHE"]       = str(HF_CACHE / "hub")
 
 # ── 1) Imports (after setting env) ─────────────────────────────────────────
 import evaluate
@@ -48,11 +47,16 @@ LOG_DIR        = "stablelm_logs"
 
 # ── 3) Load tokenizer & model ——————————————————————————————————————
 tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, use_fast=True)
-model     = AutoModelForSequenceClassification.from_pretrained(
+# Tell the tokenizer to pad with the EOS token:
+tokenizer.pad_token = tokenizer.eos_token
+
+model = AutoModelForSequenceClassification.from_pretrained(
     MODEL_DIR,
     num_labels=2,
     ignore_mismatched_sizes=True,
 )
+# Resize embeddings in case new tokens were added:
+model.resize_token_embeddings(len(tokenizer))
 
 # ── 4) Prepare datasets ————————————————————————————————————————
 raw_ds = load_dataset(
