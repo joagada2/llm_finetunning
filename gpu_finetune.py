@@ -154,14 +154,24 @@ if use_deepspeed:
 
 training_args = TrainingArguments(**training_args_kwargs)
 
-trainer = Trainer(
+from transformers import Trainer as HfTrainer
+
+# ── Custom Trainer to handle “labels” manually ──────────────────────────
+class MyTrainer(HfTrainer):
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels")
+        outputs = model(**inputs, labels=labels)
+        loss = outputs.loss
+        return (loss, outputs) if return_outputs else loss
+
+# ── Instantiate the custom Trainer ────────────────────────────────────
+trainer = MyTrainer(
     model=model,
     args=training_args,
     train_dataset=tokenized["train"],
     eval_dataset=tokenized["validation"],
     tokenizer=tokenizer,
     compute_metrics=compute_metrics,
-    label_names=["labels"],
 )
 
 # ────────────────────────────────────────────────────────────────────────────────
