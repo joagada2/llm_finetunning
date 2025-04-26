@@ -87,6 +87,8 @@ def main():
         tokenizer.add_special_tokens({'pad_token': tokenizer.eos_token})
 
     model = AutoModelForCausalLM.from_pretrained(model_name)
+    # Disable use_cache to prevent 4D causal mask issues during training
+    model.config.use_cache = False
     model.to(device)
     model.train()
 
