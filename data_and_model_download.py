@@ -20,7 +20,7 @@ from transformers import (
 )
 
 # ── CONFIG ───────────────────────────────────────────────────────────────────
-MODEL_ID="mistralai/Mistral-7B-Instruct-v0.1"
+MODEL_ID="stabilityai/stablelm-base-alpha-7b"
 DATA_NAME   = "glue"
 DATA_CONFIG = "sst2"
 OUT_ROOT    = Path("finetune_data")
