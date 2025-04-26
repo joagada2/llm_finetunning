@@ -2,55 +2,62 @@
 """
 finetune_stablelm_sst2.py
 
-Fine-tunes stabilityai/stablelm-base-alpha-7b on SST-2 sentiment classification.
-Assumes you have:
-  finetune_data/
-    ├ model/            ← cloned stablelm-base-alpha-7b repo (config.json, pytorch weights, tokenizer)
-    ├ train.jsonl
-    └ validation.jsonl
+Fine-tunes stabilityai/stablelm-base-alpha-7b on SST-2 sentiment classification,
+while redirecting all HF caches to ./hf_cache to avoid home-dir quotas.
 """
 
+import os
 import json
 import numpy as np
 from pathlib import Path
 
+# ── 0) Redirect all HF caches to a local hf_cache folder ────────────────────
+BASE_PATH = Path(__file__).parent
+HF_CACHE  = BASE_PATH / "hf_cache"
+# Subfolders for each cache type
+for sub in ("transformers","datasets","metrics","hub"):
+    (HF_CACHE / sub).mkdir(parents=True, exist_ok=True)
+
+os.environ["HF_HOME"]             = str(HF_CACHE / "hub")
+os.environ["TRANSFORMERS_CACHE"]  = str(HF_CACHE / "transformers")
+os.environ["HF_DATASETS_CACHE"]   = str(HF_CACHE / "datasets")
+os.environ["HF_METRICS_CACHE"]    = str(HF_CACHE / "metrics")
+os.environ["HF_HUB_CACHE"]        = str(HF_CACHE / "hub")
+
+# ── 1) Imports (after setting env) ─────────────────────────────────────────
 import evaluate
 from datasets import load_dataset
 from transformers import (
+    set_seed,
     AutoTokenizer,
     AutoModelForSequenceClassification,
     Trainer,
     TrainingArguments,
-    set_seed,
 )
 
-# ——— Config ——————————————————————————————————————————
+# ── 2) Configuration ───────────────────────────────────────────────────────
 set_seed(42)
+BASE_DIR       = BASE_PATH / "finetune_data"
+MODEL_DIR      = BASE_DIR / "model"
+TRAIN_JSONL    = BASE_DIR / "train.jsonl"
+VALID_JSONL    = BASE_DIR / "validation.jsonl"
+MAX_SEQ_LENGTH = 128
 
-BASE_DIR        = Path(__file__).parent / "finetune_data"
-MODEL_DIR       = BASE_DIR / "model"
-TRAIN_JSONL     = BASE_DIR / "train.jsonl"
-VALID_JSONL     = BASE_DIR / "validation.jsonl"
-MAX_SEQ_LENGTH  = 128
+OUTPUT_DIR     = "stablelm_finetuned"
+LOG_DIR        = "stablelm_logs"
 
-OUTPUT_DIR      = "stablelm_finetuned"
-LOG_DIR         = "stablelm_logs"
-
-# ——— Load tokenizer & model —————————————————————————————
+# ── 3) Load tokenizer & model ——————————————————————————————————————
 tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, use_fast=True)
 model     = AutoModelForSequenceClassification.from_pretrained(
     MODEL_DIR,
     num_labels=2,
-    ignore_mismatched_sizes=True,  # adds a fresh head
+    ignore_mismatched_sizes=True,
 )
 
-# ——— Prepare dataset —————————————————————————————————————
+# ── 4) Prepare datasets ————————————————————————————————————————
 raw_ds = load_dataset(
     "json",
-    data_files={
-        "train": str(TRAIN_JSONL),
-        "validation": str(VALID_JSONL),
-    }
+    data_files={"train": str(TRAIN_JSONL), "validation": str(VALID_JSONL)},
 )
 
 def preprocess_fn(batch):
@@ -68,17 +75,16 @@ tokenized = raw_ds.map(
     batched=True,
     remove_columns=raw_ds["train"].column_names,
 )
+tokenized.set_format("torch", columns=["input_ids","attention_mask","labels"])
 
-tokenized.set_format("torch", columns=["input_ids", "attention_mask", "labels"])
-
-# ——— Metrics ————————————————————————————————————————
+# ── 5) Metrics ——————————————————————————————————————————————
 accuracy = evaluate.load("accuracy")
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     preds = np.argmax(logits, axis=-1)
     return accuracy.compute(predictions=preds, references=labels)
 
-# ——— TrainingArguments ——————————————————————————————
+# ── 6) TrainingArguments —————————————————————————————————————
 training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
     logging_dir=LOG_DIR,
@@ -94,7 +100,7 @@ training_args = TrainingArguments(
     seed=42,
 )
 
-# ——— Trainer ————————————————————————————————————————
+# ── 7) Trainer ——————————————————————————————————————————————
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -104,7 +110,7 @@ trainer = Trainer(
     compute_metrics=compute_metrics,
 )
 
-# ——— Train ————————————————————————————————————————
+# ── 8) Train ——————————————————————————————————————————————
 if __name__ == "__main__":
     trainer.train()
     trainer.save_model(f"{OUTPUT_DIR}/best")
