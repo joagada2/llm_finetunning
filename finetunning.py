@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-finetune_stablelm_sst2.py
+finetune_stablelm_sst2_no_eval_dep.py
 
 Fine-tunes stabilityai/stablelm-base-alpha-7b on SST-2 sentiment classification,
-while redirecting all HF caches to ./hf_cache to avoid home-dir quotas.
+redirecting all HF caches to ./hf_cache to avoid home-dir quotas, and
+computes accuracy manually (no `evaluate` lib).
 """
 
 import os
 import json
 import numpy as np
 from pathlib import Path
+from sklearn.metrics import accuracy_score
 
-# ── 0) Redirect all HF caches to a local hf_cache folder ────────────────────
+# ── 0) Redirect HF caches to a local folder ──────────────────────────────────
 BASE_PATH = Path(__file__).parent
 HF_CACHE  = BASE_PATH / "hf_cache"
 for sub in ("transformers","datasets","metrics","hub"):
@@ -23,8 +25,7 @@ os.environ["HF_DATASETS_CACHE"]  = str(HF_CACHE / "datasets")
 os.environ["HF_METRICS_CACHE"]   = str(HF_CACHE / "metrics")
 os.environ["HF_HUB_CACHE"]       = str(HF_CACHE / "hub")
 
-# ── 1) Imports (after setting env) ─────────────────────────────────────────
-import evaluate
+# ── Imports (after cache setup) ─────────────────────────────────────────────
 from datasets import load_dataset
 from transformers import (
     set_seed,
@@ -34,7 +35,7 @@ from transformers import (
     TrainingArguments,
 )
 
-# ── 2) Configuration ───────────────────────────────────────────────────────
+# ── Config ───────────────────────────────────────────────────────────────────
 set_seed(42)
 BASE_DIR       = BASE_PATH / "finetune_data"
 MODEL_DIR      = BASE_DIR / "model"
@@ -45,9 +46,8 @@ MAX_SEQ_LENGTH = 128
 OUTPUT_DIR     = "stablelm_finetuned"
 LOG_DIR        = "stablelm_logs"
 
-# ── 3) Load tokenizer & model ——————————————————————————————————————
+# ── Load tokenizer & model ───────────────────────────────────────────────────
 tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, use_fast=True)
-# Tell the tokenizer to pad with the EOS token:
 tokenizer.pad_token = tokenizer.eos_token
 
 model = AutoModelForSequenceClassification.from_pretrained(
@@ -55,10 +55,9 @@ model = AutoModelForSequenceClassification.from_pretrained(
     num_labels=2,
     ignore_mismatched_sizes=True,
 )
-# Resize embeddings in case new tokens were added:
 model.resize_token_embeddings(len(tokenizer))
 
-# ── 4) Prepare datasets ————————————————————————————————————————
+# ── Prepare datasets ─────────────────────────────────────────────────────────
 raw_ds = load_dataset(
     "json",
     data_files={"train": str(TRAIN_JSONL), "validation": str(VALID_JSONL)},
@@ -81,14 +80,13 @@ tokenized = raw_ds.map(
 )
 tokenized.set_format("torch", columns=["input_ids","attention_mask","labels"])
 
-# ── 5) Metrics ——————————————————————————————————————————————
-accuracy = evaluate.load("accuracy")
+# ── Compute metrics manually ─────────────────────────────────────────────────
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     preds = np.argmax(logits, axis=-1)
-    return accuracy.compute(predictions=preds, references=labels)
+    return {"accuracy": accuracy_score(labels, preds)}
 
-# ── 6) TrainingArguments —————————————————————————————————————
+# ── TrainingArguments ────────────────────────────────────────────────────────
 training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
     logging_dir=LOG_DIR,
@@ -104,7 +102,7 @@ training_args = TrainingArguments(
     seed=42,
 )
 
-# ── 7) Trainer ——————————————————————————————————————————————
+# ── Trainer ──────────────────────────────────────────────────────────────────
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -114,7 +112,7 @@ trainer = Trainer(
     compute_metrics=compute_metrics,
 )
 
-# ── 8) Train ——————————————————————————————————————————————
+# ── Train ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     trainer.train()
     trainer.save_model(f"{OUTPUT_DIR}/best")
