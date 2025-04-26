@@ -26,6 +26,8 @@ sys.modules['triton'] = triton_mod
 # Stub Triton.language submodule
 tl_mod = types.ModuleType('triton.language')
 tl_mod.__spec__ = importlib.machinery.ModuleSpec('triton.language', None)
+# Provide constexpr so torchao intmm_triton imports succeed
+tl_mod.constexpr = lambda x: x
 sys.modules['triton.language'] = tl_mod
 # Stub Triton.jit to prevent attribute errors
 triton_mod.jit = types.SimpleNamespace()
