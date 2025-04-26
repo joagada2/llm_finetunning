@@ -20,7 +20,7 @@ from transformers import (
 )
 
 # ── CONFIG ───────────────────────────────────────────────────────────────────
-MODEL_ID    = "QuantFactory/Llama-3.1-SauerkrautLM-8b-Instruct-GGUF"
+MODEL_ID="hf-internal-testing/ggml-llama-2-7b"
 DATA_NAME   = "glue"
 DATA_CONFIG = "sst2"
 OUT_ROOT    = Path("finetune_data")
