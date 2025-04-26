@@ -20,10 +20,18 @@ kernel_mod.intmm_triton = lambda *args, **kwargs: None
 kernel_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.kernel', None)
 sys.modules['torchao'] = torchao_mod
 sys.modules['torchao.kernel'] = kernel_mod
-# Stub out torchao.float8 since transformers checks for it
-float8_mod = types.ModuleType('torchao.float8')
-float8_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.float8', None)
-sys.modules['torchao.float8'] = float8_mod
+# Stub out torchao.float8 and its submodule float8_linear since transformers/accelerate checks for float8_linear
+float8_pkg = types.ModuleType('torchao.float8')
+float8_pkg.__spec__ = importlib.machinery.ModuleSpec('torchao.float8', None)
+# Create submodule torchao.float8.float8_linear
+float8_linear_mod = types.ModuleType('torchao.float8.float8_linear')
+# Define stub class expected by accelerate
+class Float8LinearConfig:
+    pass
+float8_linear_mod.Float8LinearConfig = Float8LinearConfig
+float8_linear_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.float8.float8_linear', None)
+sys.modules['torchao.float8'] = float8_pkg
+sys.modules['torchao.float8.float8_linear'] = float8_linear_mod
 
 import torch
 from torch.utils.data import DataLoader
