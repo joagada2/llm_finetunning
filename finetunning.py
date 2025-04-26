@@ -55,6 +55,11 @@ model = AutoModelForSequenceClassification.from_pretrained(
     num_labels=2,
     ignore_mismatched_sizes=True,
 )
+
+# **NEW**: tell the model what ID to use for padding
+model.config.pad_token_id = tokenizer.eos_token_id
+
+# resize embeddings (in case tokenizer changed)
 model.resize_token_embeddings(len(tokenizer))
 
 # ── Prepare datasets ─────────────────────────────────────────────────────────
