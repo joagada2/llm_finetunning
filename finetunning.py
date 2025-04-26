@@ -2,6 +2,7 @@
 import os
 import sys
 import torch
+
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
@@ -24,7 +25,7 @@ def tokenize_function(example, tokenizer):
     return result
 
 def main():
-    # Check GPU availability
+    # Check for GPU
     print("CUDA available?", torch.cuda.is_available())
     print("CUDA device count:", torch.cuda.device_count())
     if torch.cuda.is_available():
@@ -32,17 +33,18 @@ def main():
     else:
         print("No CUDA devices found. Training will run on CPU.")
 
-    # Ensure HF token for gated models
+    # Handle gated HF models auth
     hf_token = os.getenv("HF_TOKEN")
     if not hf_token:
-        print("Warning: HF_TOKEN not set. Accessing gated repos will fail.", file=sys.stderr)
+        print("Error: HF_TOKEN not set. Please 'huggingface-cli login' or export HF_TOKEN.", file=sys.stderr)
+        sys.exit(1)
 
-    # Change to a LLaMA-2 model you have access to
+    # Model and dataset config
     model_name = os.getenv("BASE_MODEL", "meta-llama/Llama-2-7b-chat-hf")
     dataset_name = "glue"
     subset_name = "sst2"
 
-    # 1) Load tokenizer with authentication
+    # 1) Load tokenizer
     try:
         tokenizer = AutoTokenizer.from_pretrained(
             model_name,
@@ -53,7 +55,7 @@ def main():
         print(f"Error loading tokenizer for {model_name}: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # 2) Load model in FP16/FP32 with authentication
+    # 2) Load model
     try:
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -68,7 +70,7 @@ def main():
     if torch.cuda.is_available():
         model = model.half().cuda()
 
-    # 3) Apply LoRA adapters
+    # 3) Apply LoRA
     lora_config = LoraConfig(
         r=8,
         lora_alpha=16,
@@ -86,7 +88,7 @@ def main():
         batched=False,
     )
 
-    # 5) Split for evaluation
+    # 5) Train/Val split
     split = tokenized.train_test_split(test_size=0.1)
 
     # 6) Training arguments
@@ -106,7 +108,7 @@ def main():
         report_to="none",
     )
 
-    # 7) Trainer & start training
+    # 7) Setup Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
