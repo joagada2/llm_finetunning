@@ -97,7 +97,11 @@ def main():
 
     # Load and tokenize dataset
     dataset = load_dataset('glue', 'sst2', split='train')
-    tokenized = dataset.map(lambda ex: tokenize_function(ex, tokenizer), batched=False)
+    tokenized = dataset.map(
+        lambda ex: tokenize_function(ex, tokenizer),
+        batched=False,
+        remove_columns=dataset.column_names  # drop original text columns so collator sees only tensors
+    )
 
     # Data loader
     collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
