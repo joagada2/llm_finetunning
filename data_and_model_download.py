@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+import os
+
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
 
 def download_model_and_dataset(
@@ -19,8 +21,6 @@ def download_model_and_dataset(
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         trust_remote_code=True,
-        device_map="auto",
-        quantization_config=None,      # ← no bnb quant
     )
 
     # 3) Download the dataset
@@ -36,13 +36,9 @@ def download_model_and_dataset(
 
 
 if __name__ == "__main__":
-    # Change this to the LLaMA variant you prefer:
-    #  - LLaMA-2 7B chat:  "meta-llama/Llama-2-7b-chat-hf"
-    #  - LLaMA-2 8B chat:  "meta-llama/Llama-2-8b-chat-hf"
-    # model_name   = "meta-llama/Llama-2-7b-chat-hf"
-    # model_name   = "EleutherAI/gpt-neo-1.3B"
-    model_name = os.getenv("BASE_MODEL", "distilgpt2")
-    dataset_name = "trl-lib/Capybara"
-    dataset_cfg  = None     # e.g. "multiturn" if that HF dataset has a config
+    # Set defaults or override via environment
+    model_name   = os.getenv("BASE_MODEL", "distilgpt2")
+    dataset_name = os.getenv("DATASET_NAME", "trl-lib/Capybara")
+    dataset_cfg  = os.getenv("DATASET_CONFIG", None)
 
     download_model_and_dataset(model_name, dataset_name, dataset_cfg)
