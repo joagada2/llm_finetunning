@@ -40,7 +40,8 @@ def main():
         sys.exit(1)
 
     # Model and dataset config
-    model_name   = os.getenv("BASE_MODEL", "meta-llama/Llama-2-7b-chat-hf")
+    model_name   = os.getenv("BASE_MODEL", "EleutherAI/gpt-neo-1.3B")
+    # model_name   = os.getenv("BASE_MODEL", "meta-llama/Llama-2-7b-chat-hf")
     dataset_name = "glue"
     subset_name  = "sst2"
 
