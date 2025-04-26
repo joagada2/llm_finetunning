@@ -39,7 +39,8 @@ if __name__ == "__main__":
     # Change this to the LLaMA variant you prefer:
     #  - LLaMA-2 7B chat:  "meta-llama/Llama-2-7b-chat-hf"
     #  - LLaMA-2 8B chat:  "meta-llama/Llama-2-8b-chat-hf"
-    model_name   = "meta-llama/Llama-2-7b-chat-hf"
+    # model_name   = "meta-llama/Llama-2-7b-chat-hf"
+    model_name   = "EleutherAI/gpt-neo-1.3B"
     dataset_name = "trl-lib/Capybara"
     dataset_cfg  = None     # e.g. "multiturn" if that HF dataset has a config
 
