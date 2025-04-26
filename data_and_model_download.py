@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 import sys
 import types
-import importlib.machinery
 import os
 import torch
-from transformers import AutoConfig, AutoTokenizer, AutoModelForCausalLM
+from huggingface_hub import snapshot_download
+from transformers import LlamaTokenizer, LlamaForCausalLM
 from datasets import load_dataset
 
-# Stub out deepspeed to prevent import errors on CPU-only nodes
+# Stub out deepspeed and triton to prevent import errors on CPU-only nodes
 sys.modules['deepspeed'] = types.ModuleType('deepspeed')
-# Stub out Triton to prevent import errors on CPU-only nodes
 triton_mod = types.ModuleType('triton')
 triton_mod.Config = lambda *args, **kwargs: None
 triton_mod.jit = lambda *args, **kwargs: (lambda fn: fn)
-triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[]))
+triton_mod.language = types.SimpleNamespace(jit=lambda *a, **k: None)
 sys.modules['triton'] = triton_mod
-sys.modules['triton.language'] = types.ModuleType('triton.language')  # no-op
+sys.modules['triton.language'] = types.ModuleType('triton.language')
 
 
 def download_model_and_data(
@@ -25,66 +24,49 @@ def download_model_and_data(
     subset_pct: float = 0.1
 ):
     """
-    Download a model and a subset of a Hugging Face dataset.
+    Download a GGUF-based Llama model via snapshot_download, prepare tokenizer/model, and load a dataset subset.
 
     Args:
-        model_name: HF repo ID for the model.
+        model_name: HF repo ID for the GGUF model.
         dataset_name: HF dataset name.
-        dataset_config: Optional config name (e.g., 'sst2' for GLUE).
+        dataset_config: Optional config name (e.g. 'sst2' for GLUE).
         subset_pct: Fraction of the training split to download.
     """
-    # 1) Load config (enables trust_remote_code hooks)
-    print(f"Loading config for {model_name}...")
-    config = AutoConfig.from_pretrained(
-        model_name,
-        trust_remote_code=True,
-    )
+    # 1) Download entire model repo locally
+    print(f"Downloading model files for {model_name}...")
+    repo_dir = snapshot_download(model_name)
+    print(f"Model files saved to: {repo_dir}")
 
-    # 2) Download tokenizer
-    print(f"Downloading tokenizer for {model_name}...")
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
-        config=config,
-        trust_remote_code=True,
-        use_fast=True,
-    )
+    # 2) Load tokenizer
+    print("Loading Llama tokenizer...")
+    tokenizer = LlamaTokenizer.from_pretrained(repo_dir)
     if tokenizer.pad_token is None:
-        tokenizer.pad_token = (tokenizer.eos_token or tokenizer.all_special_tokens[-1])
+        tokenizer.pad_token = tokenizer.eos_token
 
-    # 3) Download model in FP16 on GPU
-    print(f"Downloading model {model_name} (FP16, device_map=auto)...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        config=config,
-        trust_remote_code=True,
+    # 3) Load model into GPU in fp16
+    print("Loading Llama model (fp16, device_map=auto)...")
+    model = LlamaForCausalLM.from_pretrained(
+        repo_dir,
         device_map="auto",
+        trust_remote_code=True,
         torch_dtype=torch.float16,
     )
 
     # 4) Load dataset subset
-    split_str = f"train[:{int(subset_pct * 100)}%]"
-    print(f"Loading dataset {dataset_name}{('/' + dataset_config) if dataset_config else ''} split={split_str}...")
+    percent = int(subset_pct * 100)
+    split = f"train[:{percent}%]"
+    ds_args = {"split": split}
     if dataset_config:
-        dataset = load_dataset(
-            dataset_name,
-            dataset_config,
-            split=split_str,
-        )
-    else:
-        dataset = load_dataset(
-            dataset_name,
-            split=split_str,
-        )
+        ds_args.update({"name": dataset_config})
+    print(f"Loading dataset {dataset_name}{('/' + dataset_config) if dataset_config else ''} split={split}...")
+    dataset = load_dataset(dataset_name, **ds_args)
 
     print("Download complete.")
     return tokenizer, model, dataset
 
 
 if __name__ == "__main__":
-    MODEL = os.getenv(
-        "BASE_MODEL",
-        "QuantFactory/Llama-3.1-SauerkrautLM-8b-Instruct-GGUF",
-    )
+    MODEL = os.getenv("BASE_MODEL", "QuantFactory/Llama-3.1-SauerkrautLM-8b-Instruct-GGUF")
     DATASET = os.getenv("DATASET_NAME", "glue")
     CONFIG = os.getenv("DATASET_CONFIG", "sst2")
 
@@ -95,6 +77,7 @@ if __name__ == "__main__":
         subset_pct=0.1,
     )
 
+    # Save locally for finetuning
     mod.save_pretrained("./downloaded-model")
     tok.save_pretrained("./downloaded-model")
     ds.save_to_disk("./downloaded-data")
