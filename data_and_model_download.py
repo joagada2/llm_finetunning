@@ -11,7 +11,7 @@ sys.modules['triton'] = triton_mod
 
 import os
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import LlamaTokenizer, LlamaForCausalLM
 from datasets import load_dataset
 
 def download_model_and_data(
@@ -21,33 +21,37 @@ def download_model_and_data(
     subset_pct: float = 0.1
 ):
     """
-    Download pretrained model and a subset of a Hugging Face dataset.
+    Download a Llama model and a subset of a Hugging Face dataset.
 
     Args:
-        model_name: HF repo ID for the model.
+        model_name: HF repo ID for the Llama model.
         dataset_name: HF dataset name.
-        dataset_config: Optional config name (e.g. "sst2" for GLUE).
+        dataset_config: Optional config name (e.g., 'sst2' for GLUE).
         subset_pct: Fraction of the training split to download.
     """
     # 1) Download tokenizer
-    print(f"Downloading tokenizer for {model_name}...")
-    tokenizer = AutoTokenizer.from_pretrained(
+    print(f"Downloading Llama tokenizer for {model_name}...")
+    tokenizer = LlamaTokenizer.from_pretrained(
         model_name,
+        use_fast=True,
+        trust_remote_code=True
+    )
+    tokenizer.pad_token_id = tokenizer.eos_token_id
+
+    # 2) Download model in FP16 on GPU
+    print(f"Downloading Llama model {model_name} (FP16, device_map=auto)...")
+    model = LlamaForCausalLM.from_pretrained(
+        model_name,
+        load_in_8bit=False,
+        device_map="auto",
+        torch_dtype=torch.float16,
         trust_remote_code=True
     )
 
-    # 2) Download model (FP16 on GPU)
-    print(f"Downloading model {model_name} (FP16, device_map=auto)...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        trust_remote_code=True,
-        device_map="auto",
-        torch_dtype=torch.float16,
-    )
-
-    # 3) Load a subset of the dataset
+    # 3) Load dataset subset
     split_str = f"train[:{int(subset_pct*100)}%]"
-    print(f"Loading dataset {dataset_name}{f'/{dataset_config}' if dataset_config else ''} split={split_str}...")
+    suffix = f"/{dataset_config}" if dataset_config else ""
+    print(f"Loading dataset {dataset_name}{suffix} split={split_str}...")
     if dataset_config:
         dataset = load_dataset(dataset_name, dataset_config, split=split_str)
     else:
@@ -57,12 +61,12 @@ def download_model_and_data(
     return tokenizer, model, dataset
 
 if __name__ == "__main__":
-    # Example usage
+    # Usage example
     MODEL = os.getenv("BASE_MODEL", "QuantFactory/Llama-3.1-SauerkrautLM-8b-Instruct-GGUF")
     DATASET = os.getenv("DATASET_NAME", "glue")
     CONFIG = os.getenv("DATASET_CONFIG", "sst2")
-    TOK, MOD, DS = download_model_and_data(MODEL, DATASET, CONFIG, subset_pct=0.1)
+    tok, mod, ds = download_model_and_data(MODEL, DATASET, CONFIG, subset_pct=0.1)
     # Save locally
-    MOD.save_pretrained("./downloaded-model")
-    TOK.save_pretrained("./downloaded-model")
-    DS.save_to_disk("./downloaded-data")
+    mod.save_pretrained("./downloaded-model")
+    tok.save_pretrained("./downloaded-model")
+    ds.save_to_disk("./downloaded-data")
