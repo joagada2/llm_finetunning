@@ -20,7 +20,7 @@ kernel_mod.intmm_triton = lambda *args, **kwargs: None
 kernel_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.kernel', None)
 sys.modules['torchao'] = torchao_mod
 sys.modules['torchao.kernel'] = kernel_mod
-# Stub out torchao.float8 and its submodule float8_linear since transformers/accelerate checks for float8_linear
+# Stub out torchao.float8 and its submodule float8_linear
 float8_pkg = types.ModuleType('torchao.float8')
 float8_pkg.__spec__ = importlib.machinery.ModuleSpec('torchao.float8', None)
 # Create submodule torchao.float8.float8_linear
@@ -32,6 +32,14 @@ float8_linear_mod.Float8LinearConfig = Float8LinearConfig
 float8_linear_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.float8.float8_linear', None)
 sys.modules['torchao.float8'] = float8_pkg
 sys.modules['torchao.float8.float8_linear'] = float8_linear_mod
+
+# Stub out torchao.quantization and Int4WeightOnlyConfig
+quant_mod = types.ModuleType('torchao.quantization')
+quant_mod.__spec__ = importlib.machinery.ModuleSpec('torchao.quantization', None)
+class Int4WeightOnlyConfig:
+    pass
+quant_mod.Int4WeightOnlyConfig = Int4WeightOnlyConfig
+sys.modules['torchao.quantization'] = quant_mod
 
 import torch
 from torch.utils.data import DataLoader
