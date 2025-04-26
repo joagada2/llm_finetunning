@@ -14,13 +14,13 @@ def download_model_and_dataset(
         trust_remote_code=True,
     )
 
-    # 2) Download the model (no bitsandbytes quantization)
+    # 2) Download the model (fp16/fp32)
     print(f"Downloading model {model_name} (fp16/fp32)...")
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         trust_remote_code=True,
         device_map="auto",
-        quantization_config=None,      # ← disable all bnb quant
+        quantization_config=None,      # ← no bnb quant
     )
 
     # 3) Download the dataset
@@ -36,8 +36,10 @@ def download_model_and_dataset(
 
 
 if __name__ == "__main__":
-    # You can change these to whatever you need
-    model_name   = "Qwen/Qwen2.5-0.5B"
+    # Change this to the LLaMA variant you prefer:
+    #  - LLaMA-2 7B chat:  "meta-llama/Llama-2-7b-chat-hf"
+    #  - LLaMA-2 8B chat:  "meta-llama/Llama-2-8b-chat-hf"
+    model_name   = "meta-llama/Llama-2-7b-chat-hf"
     dataset_name = "trl-lib/Capybara"
     dataset_cfg  = None     # e.g. "multiturn" if that HF dataset has a config
 
