@@ -16,7 +16,6 @@ from transformers import (
     set_seed,
     AutoTokenizer,
     AutoModelForSequenceClassification,
-    Trainer,
     TrainingArguments,
 )
 from peft import LoraConfig, get_peft_model
@@ -146,7 +145,7 @@ training_args_kwargs = dict(
     eval_steps=500,
     save_steps=500,
     save_total_limit=2,
-    report_to=[],  # disables all experiment tracking (e.g. W&B)
+    report_to=[],  # disables all experiment tracking
 )
 
 if use_deepspeed:
@@ -156,15 +155,19 @@ training_args = TrainingArguments(**training_args_kwargs)
 
 from transformers import Trainer as HfTrainer
 
-# ── Custom Trainer to handle “labels” manually ──────────────────────────
+# ────────────────────────────────────────────────────────────────────────────────
+# 7) Custom Trainer to handle “labels” and extra kwargs in compute_loss
+# ────────────────────────────────────────────────────────────────────────────────
 class MyTrainer(HfTrainer):
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.pop("labels")
         outputs = model(**inputs, labels=labels)
         loss = outputs.loss
         return (loss, outputs) if return_outputs else loss
 
-# ── Instantiate the custom Trainer ────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────────
+# 8) Instantiate Trainer
+# ────────────────────────────────────────────────────────────────────────────────
 trainer = MyTrainer(
     model=model,
     args=training_args,
@@ -175,7 +178,7 @@ trainer = MyTrainer(
 )
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 7) Train & evaluate
+# 9) Train & evaluate
 # ────────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     trainer.train()
