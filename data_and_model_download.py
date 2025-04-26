@@ -1,26 +1,37 @@
 #!/usr/bin/env python3
 import os
-from huggingface_hub import Repository
+from pathlib import Path
+
+from huggingface_hub import snapshot_download
 from datasets import load_dataset
 
-OUT_DIR     = "finetune_data"
+# ── CONFIG ───────────────────────────────────────────────────────────────────
 MODEL_ID    = "QuantFactory/Llama-3.1-SauerkrautLM-8b-Instruct-GGUF"
 DATA_NAME   = "glue"
 DATA_CONFIG = "sst2"
+OUT_DIR     = Path("finetune_data")
 
-os.makedirs(OUT_DIR, exist_ok=True)
+# ── SETUP ────────────────────────────────────────────────────────────────────
+OUT_DIR.mkdir(exist_ok=True)
+MODEL_DIR = OUT_DIR / "model"
+MODEL_DIR.mkdir(exist_ok=True)
 
-# A) Clone full transformers repo
-print("Cloning the transformer-compatible model repo …")
-Repository(local_dir=os.path.join(OUT_DIR,"model"),
-           clone_from=MODEL_ID)
+# ── 1) Download the HF model repo via HTTP (no git-lfs) ──────────────────────
+print("Downloading model repo via snapshot_download…")
+repo_path = snapshot_download(
+    repo_id=MODEL_ID,
+    cache_dir=str(MODEL_DIR),
+    repo_type="model",       # default, but explicit here
+    local_files_only=False   # ensure we hit the network if not cached
+)
+print(f"✓ Model files written to {MODEL_DIR}")
 
-# B) Dump raw SST-2 into JSONL
-print("Downloading SST-2 splits …")
+# ── 2) Pull raw SST-2 splits and save as JSONL ───────────────────────────────
+print("Downloading SST-2 dataset…")
 ds = load_dataset(DATA_NAME, DATA_CONFIG)
 for split, data in ds.items():
-    out_path = os.path.join(OUT_DIR, f"{split}.jsonl")
-    print(f" • {split} → {out_path}")
-    data.to_json(out_path, orient="records", lines=True)
+    out_file = OUT_DIR / f"{split}.jsonl"
+    print(f"  • Saving {split} → {out_file}")
+    data.to_json(out_file, orient="records", lines=True)
 
-print("✔️ All raw data + model repo ready in ./finetune_data/")
+print("✅ Finished. Repo + data are in ./finetune_data/")
