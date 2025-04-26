@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+import sys
+import types
+import importlib.machinery
+# Stub out Triton to prevent import errors on CPU-only nodes
+triton_mod = types.ModuleType('triton')
+triton_mod.Config = lambda *args, **kwargs: None
+triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[]))
+triton_mod.__spec__ = importlib.machinery.ModuleSpec('triton', None)
+sys.modules['triton'] = triton_mod
+
 import os
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
