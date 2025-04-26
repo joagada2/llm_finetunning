@@ -117,7 +117,7 @@ def main():
         for step, batch in enumerate(dataloader):
             # Move to device
             batch = {k: v.to(device) for k, v in batch.items()}
-            outputs = model(**batch)
+            outputs = model(**batch, use_cache=False)  # disable caching to avoid 4D mask shape issues
             loss = outputs.loss / GRAD_ACC_STEPS
             loss.backward()
 
