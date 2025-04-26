@@ -33,43 +33,24 @@ def main():
     else:
         print("No CUDA devices found. Training will run on CPU.")
 
-    # Handle gated HF models auth
-    hf_token = os.getenv("HF_TOKEN")
-    if not hf_token:
-        print("Error: HF_TOKEN not set. Please 'huggingface-cli login' or export HF_TOKEN.", file=sys.stderr)
-        sys.exit(1)
-
-    # Model and dataset config
+    # Model and dataset config (no HF token required for ungated models)
     model_name   = os.getenv("BASE_MODEL", "EleutherAI/gpt-neo-1.3B")
-    dataset_name = "glue"
-    subset_name  = "sst2"
+    dataset_name = os.getenv("DATASET_NAME", "glue")
+    subset_name  = os.getenv("DATASET_CONFIG", "sst2")
 
     # 1) Load tokenizer
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
-            trust_remote_code=True,
-            token=hf_token,
-        )
-    except Exception as e:
-        print(f"Error loading tokenizer for {model_name}: {e}", file=sys.stderr)
-        sys.exit(1)
-    # Ensure a pad token exists
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name,
+        padding_side="right",
+        truncation_side="right",
+    )
     if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.add_special_tokens({'pad_token': tokenizer.eos_token})
 
-    # 2) Load model
-    try:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            trust_remote_code=True,
-            device_map="auto",
-            token=hf_token,
-        )
-    except Exception as e:
-        print(f"Error loading model {model_name}: {e}", file=sys.stderr)
-        sys.exit(1)
-
+    # 2) Load model (no accelerator/triton issues)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+    )
     if torch.cuda.is_available():
         model = model.half().cuda()
 
@@ -91,12 +72,12 @@ def main():
         batched=False,
     )
 
-    # 5) Train/Val split
+    # 5) Split for evaluation
     split = tokenized.train_test_split(test_size=0.1)
 
     # 6) Training arguments
     training_args = TrainingArguments(
-        output_dir="./gpt-neo-1.3B-sst2-lora",
+        output_dir=f"./{model_name.split('/')[-1]}-sst2-lora",
         do_eval=True,
         eval_steps=50,
         per_device_train_batch_size=2,
@@ -109,6 +90,7 @@ def main():
         bf16=torch.cuda.is_available(),
         save_total_limit=1,
         report_to="none",
+        dataloader_num_workers=4,
     )
 
     # 7) Setup Trainer
