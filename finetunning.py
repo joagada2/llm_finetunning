@@ -89,17 +89,23 @@ def compute_metrics(eval_pred):
 # ── TrainingArguments ────────────────────────────────────────────────────────
 training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
-    logging_dir=LOG_DIR,
     num_train_epochs=3,
     per_device_train_batch_size=8,
     per_device_eval_batch_size=8,
     learning_rate=2e-5,
     weight_decay=0.01,
-    evaluation_strategy="epoch",
-    save_strategy="epoch",
+
+    # legacy evaluation & saving
+    evaluate_during_training=True,  # instead of evaluation_strategy
+    logging_steps=50,
+    eval_steps=500,
+    save_steps=500,
+    save_total_limit=2,
+
     load_best_model_at_end=True,
     metric_for_best_model="accuracy",
-    seed=42,
+
+    logging_dir=LOG_DIR,
 )
 
 # ── Trainer ──────────────────────────────────────────────────────────────────
