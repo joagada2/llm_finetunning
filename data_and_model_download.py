@@ -4,12 +4,14 @@ import types
 import importlib.machinery
 
 # Stub out deepspeed to prevent import errors on CPU-only nodes
+import sys
+import types
+import importlib.machinery
+
 deep_pkg = types.ModuleType('deepspeed')
 deep_pkg.__spec__ = importlib.machinery.ModuleSpec('deepspeed', None)
-# Dummy DeepSpeedEngine so imports in modeling_utils pass
 class DeepSpeedEngine: pass
 deep_pkg.DeepSpeedEngine = DeepSpeedEngine
-# Stub deepspeed.ops subpackage
 deep_ops = types.ModuleType('deepspeed.ops')
 deep_ops.__spec__ = importlib.machinery.ModuleSpec('deepspeed.ops', None)
 deep_pkg.ops = deep_ops
@@ -18,15 +20,8 @@ sys.modules['deepspeed.ops'] = deep_ops
 
 # Stub out Triton to prevent import errors on CPU-only nodes
 triton_mod = types.ModuleType('triton')
-# No-op Config
 triton_mod.Config = lambda *args, **kwargs: None
-# Provide a no-op jit decorator
-def _jit_decorator(*args, **kwargs):
-    def decorator(fn):
-        return fn
-    return decorator
-triton_mod.jit = _jit_decorator
-# Stub runtime.driver.active
+triton_mod.jit = lambda *args, **kwargs: (lambda fn: fn)
 triton_mod.runtime = types.SimpleNamespace(driver=types.SimpleNamespace(active=[]))
 triton_mod.__spec__ = importlib.machinery.ModuleSpec('triton', None)
 sys.modules['triton'] = triton_mod
@@ -35,7 +30,6 @@ sys.modules['triton'] = triton_mod
 import importlib
 tl_mod = types.ModuleType('triton.language')
 tl_mod.__spec__ = importlib.machinery.ModuleSpec('triton.language', None)
-# Minimal attributes to satisfy torchao/kernel/intmm_triton
 tl_mod.constexpr = lambda x: x
 tl_mod.int32 = None
 tl_mod.int64 = None
@@ -45,7 +39,7 @@ sys.modules['triton.language'] = tl_mod
 
 import os
 import torch
-from transformers import LlamaTokenizer, LlamaForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
 
 def download_model_and_data(
@@ -55,31 +49,31 @@ def download_model_and_data(
     subset_pct: float = 0.1
 ):
     """
-    Download a Llama model and a subset of a Hugging Face dataset.
+    Download a model and a subset of a Hugging Face dataset.
 
     Args:
-        model_name: HF repo ID for the Llama model.
+        model_name: HF repo ID for the model.
         dataset_name: HF dataset name.
         dataset_config: Optional config name (e.g., 'sst2' for GLUE).
         subset_pct: Fraction of the training split to download.
     """
     # 1) Download tokenizer
-    print(f"Downloading Llama tokenizer for {model_name}...")
-    tokenizer = LlamaTokenizer.from_pretrained(
+    print(f"Downloading tokenizer for {model_name}...")
+    tokenizer = AutoTokenizer.from_pretrained(
         model_name,
         use_fast=True,
-        trust_remote_code=True
+        trust_remote_code=True,
     )
-    tokenizer.pad_token_id = tokenizer.eos_token_id
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token if hasattr(tokenizer, 'eos_token') else tokenizer.all_special_tokens[-1]
 
     # 2) Download model in FP16 on GPU
-    print(f"Downloading Llama model {model_name} (FP16, device_map=auto)...")
-    model = LlamaForCausalLM.from_pretrained(
+    print(f"Downloading model {model_name} (FP16, device_map=auto)...")
+    model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        load_in_8bit=False,
+        trust_remote_code=True,
         device_map="auto",
         torch_dtype=torch.float16,
-        trust_remote_code=True
     )
 
     # 3) Load dataset subset
@@ -95,12 +89,10 @@ def download_model_and_data(
     return tokenizer, model, dataset
 
 if __name__ == "__main__":
-    # Usage example
     MODEL = os.getenv("BASE_MODEL", "QuantFactory/Llama-3.1-SauerkrautLM-8b-Instruct-GGUF")
     DATASET = os.getenv("DATASET_NAME", "glue")
     CONFIG = os.getenv("DATASET_CONFIG", "sst2")
     tok, mod, ds = download_model_and_data(MODEL, DATASET, CONFIG, subset_pct=0.1)
-    # Save locally
     mod.save_pretrained("./downloaded-model")
     tok.save_pretrained("./downloaded-model")
     ds.save_to_disk("./downloaded-data")
