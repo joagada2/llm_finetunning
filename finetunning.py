@@ -103,12 +103,12 @@ def main():
     )
 
         # Data loader
-    def collate_fn(batch):
+        def collate_fn(batch):
         # batch is a list of dicts with 'input_ids', 'attention_mask', 'labels'
+        # Pad to max length without truncation parameter
         return tokenizer.pad(
             batch,
             padding=True,
-            truncation=True,
             max_length=MAX_LENGTH,
             return_tensors='pt'
         )
