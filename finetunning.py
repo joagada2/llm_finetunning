@@ -52,8 +52,7 @@ from torch.utils.data import DataLoader
 from datasets import load_dataset
 from transformers import (
     AutoTokenizer,
-    AutoModelForCausalLM,
-    DataCollatorForLanguageModeling
+    AutoModelForCausalLM
 )
 
 # Hyperparameters
@@ -103,9 +102,17 @@ def main():
         remove_columns=dataset.column_names  # drop original text columns so collator sees only tensors
     )
 
-    # Data loader
-    collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
-    dataloader = DataLoader(tokenized, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collator)
+        # Data loader
+    def collate_fn(batch):
+        # batch is a list of dicts with 'input_ids', 'attention_mask', 'labels'
+        return tokenizer.pad(
+            batch,
+            padding=True,
+            truncation=True,
+            max_length=MAX_LENGTH,
+            return_tensors='pt'
+        )
+    dataloader = DataLoader(tokenized, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
 
     # Optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
