@@ -3,10 +3,16 @@
 gpu_finetune_complete.py
 
 Optimized finetuning of stabilityai/stablelm-base-alpha-7b on SST-2,
-with HF cache redirection, optional DeepSpeed, LoRA, fp16, and legacy Trainer args.
+fully offline, with HF cache redirection, optional DeepSpeed, LoRA, fp16,
+and legacy Trainer args.
 """
 
 import os
+# ────────────────────────────────────────────────────────────────────────────────
+# Force offline mode before any HF imports
+os.environ["HF_HUB_OFFLINE"] = "1"
+# ────────────────────────────────────────────────────────────────────────────────
+
 import json
 from pathlib import Path
 import numpy as np
@@ -20,6 +26,7 @@ from transformers import (
 )
 from peft import LoraConfig, get_peft_model
 
+# ────────────────────────────────────────────────────────────────────────────────
 # 0) Redirect ALL HF caches
 BASE = Path(__file__).parent
 HF_CACHE = BASE / "hf_cache"
@@ -31,6 +38,7 @@ os.environ.update({
     "HF_DATASETS_CACHE":  str(HF_CACHE / "datasets"),
     "HF_METRICS_CACHE":   str(HF_CACHE / "metrics"),
 })
+# ────────────────────────────────────────────────────────────────────────────────
 
 # 1) Paths & seed
 set_seed(42)
@@ -64,23 +72,29 @@ if use_deepspeed:
         json.dump(ds_conf, f, indent=2)
     print(f">>> DeepSpeed config at {ds_config_path}")
 
-# 3) Load & patch tokenizer + model
-tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, use_fast=True)
+# 3) Load & patch tokenizer + model (offline, local only)
+tokenizer = AutoTokenizer.from_pretrained(
+    MODEL_DIR,
+    use_fast=True,
+    local_files_only=True,
+)
+# Ensure a padding token exists
 tokenizer.pad_token = tokenizer.eos_token
 
-tokenizer = AutoTokenizer.from_pretrained("stabilityai/stablelm-base-alpha-7b", use_fast=True)
-model     = AutoModelForSequenceClassification.from_pretrained(
-    "stabilityai/stablelm-base-alpha-7b",
+model = AutoModelForSequenceClassification.from_pretrained(
+    MODEL_DIR,
     num_labels=2,
     ignore_mismatched_sizes=True,
+    local_files_only=True,
 )
-
-# ensure caching disabled
+# Disable caching so gradient checkpointing works
 model.config.use_cache = False
+
+# Propagate pad_token
 model.config.pad_token_id = tokenizer.eos_token_id
 model.resize_token_embeddings(len(tokenizer))
 
-# LoRA on NeoX modules
+# Apply LoRA on NeoX modules
 lora_cfg = LoraConfig(
     r=16,
     lora_alpha=32,
@@ -132,7 +146,7 @@ training_args_kwargs = dict(
     eval_steps=500,
     save_steps=500,
     save_total_limit=2,
-    report_to=[],  # disable W&B
+    report_to=[],  # disable all experiment tracking
 )
 if use_deepspeed:
     training_args_kwargs["deepspeed"] = str(ds_config_path)
@@ -142,7 +156,7 @@ from transformers import Trainer as HfTrainer
 
 # 7) Custom Trainer to handle labels
 class MyTrainer(HfTrainer):
-    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+    def compute_loss(self, model, inputs, return_outputs=False):
         labels = inputs.pop("labels")
         outputs = model(**inputs, labels=labels)
         loss = outputs.loss
