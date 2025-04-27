@@ -20,7 +20,7 @@ module load craype-accel-amd-gfx90a
 source /gpfs/wolf2/olcf/trn040/world-shared/sajal/env-ft-6.1.3/bin/activate
 
 # 2) Switch to project directory
-cd /gpfs/wolf2/olcf/trn040/world-shared/agada/llm_finetunning
+cd /gpfs/wolf2/olcf/trn040/scratch/josephagada/project/llm_finetunning
 
 echo "===== PIPELINE START ====="
 echo "Host: $(hostname)"
