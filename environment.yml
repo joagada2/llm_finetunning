@@ -1,0 +1,17 @@
+name: llm_finetune
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - scikit-learn
+  - pip:
+      - torch               # will pull the CUDA or ROCm build if available
+      - transformers
+      - huggingface-hub
+      - datasets
+      - evaluate
+      - peft
+      - bitsandbytes
+      - accelerate
