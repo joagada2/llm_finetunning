@@ -30,14 +30,14 @@ echo "--------------------------"
 
 # 3) Download & prepare model + data
 echo ">>> Running data preparation"
-python3 prepare_and_download_finetune.py
+python3 data_and_model_download.py
 
 echo ">>> Data prep complete at $(date)"
 echo "--------------------------"
 
 # 4) Run fine-tuning
 echo ">>> Launching fine-tuning"
-python3 gpu_finetune_complete.py
+python3 gpu_finetune.py
 
 echo "===== PIPELINE END ====="
 echo "Time: $(date)"
