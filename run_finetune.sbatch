@@ -15,7 +15,7 @@ unset SLURM_EXPORT_ENV
 
 # No conda activation here—job will use your current env
 
-cd /gpfs/wolf2/olcf/trn040/scratch/josephagada/project/llm_finetunning
+# cd /gpfs/wolf2/olcf/trn040/scratch/josephagada/project/llm_finetunning
 
 echo "===== PIPELINE START ====="
 echo "Host: $(hostname)"
