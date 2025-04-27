@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH --export=ALL               # inherit your activated env
 #SBATCH -A trn040
 #SBATCH -J slm-full-pipe
 #SBATCH -o .cache/sbatch_logs/%x-%j.out
@@ -12,30 +13,25 @@
 
 unset SLURM_EXPORT_ENV
 
-# 1) Load modules & Python env
-module load PrgEnv-gnu/8.6.0
-module load miniforge3/23.11.0
-module load rocm/6.2.4
-module load craype-accel-amd-gfx90a
-source /gpfs/wolf2/olcf/trn040/world-shared/sajal/env-ft-6.1.3/bin/activate
+# No conda activation here—job will use your current env
 
-# 2) Switch to project directory
 cd /gpfs/wolf2/olcf/trn040/scratch/josephagada/project/llm_finetunning
 
 echo "===== PIPELINE START ====="
 echo "Host: $(hostname)"
 echo "Time: $(date)"
 echo "PWD:  $(pwd)"
+echo "Using Python: $(which python3)"
 echo "--------------------------"
 
-# 3) Download & prepare model + data
+# STEP 1: Download model & data
 echo ">>> Running data preparation"
 python3 data_and_model_download.py
 
 echo ">>> Data prep complete at $(date)"
 echo "--------------------------"
 
-# 4) Run fine-tuning
+# STEP 2: Fine-tuning
 echo ">>> Launching fine-tuning"
 python3 gpu_finetune.py
 
