@@ -68,11 +68,13 @@ if use_deepspeed:
 tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, use_fast=True)
 tokenizer.pad_token = tokenizer.eos_token
 
-model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_DIR,
+tokenizer = AutoTokenizer.from_pretrained("stabilityai/stablelm-base-alpha-7b", use_fast=True)
+model     = AutoModelForSequenceClassification.from_pretrained(
+    "stabilityai/stablelm-base-alpha-7b",
     num_labels=2,
     ignore_mismatched_sizes=True,
 )
+
 # ensure caching disabled
 model.config.use_cache = False
 model.config.pad_token_id = tokenizer.eos_token_id
