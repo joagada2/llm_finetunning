@@ -173,7 +173,7 @@ def compute_metrics(pred):
 training_args_kwargs = dict(
     output_dir="gpu_finetuned_complete",
     logging_dir="logs_complete",
-    max_steps=2_000
+    max_steps=2_000,
     # num_train_epochs=1,
     per_device_train_batch_size=4,
     gradient_accumulation_steps=2,
