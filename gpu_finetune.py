@@ -103,6 +103,7 @@ lora_cfg = LoraConfig(
 )
 model = get_peft_model(model, lora_cfg)
 
+"""
 # ────────────────────────────────────────────────────────────────────────────────
 # 4) Dataset preparation
 # ────────────────────────────────────────────────────────────────────────────────
@@ -129,7 +130,36 @@ tokenized = raw.map(
     remove_columns=raw["train"].column_names,
 )
 tokenized.set_format("torch", columns=["input_ids", "attention_mask", "labels"])
+"""
+# LAOD SUBSET OF DATA
+# 4) Dataset prep (subsample to 20 k train / 2 k val)
+raw = load_dataset(
+    "json",
+    data_files={"train": str(TRAIN_FILE), "validation": str(VALID_FILE)},
+    cache_dir=str(HF_CACHE / "datasets"),
+)
 
+# shuffle+take only the first 20 000 training examples and 2 000 validation examples
+raw["train"] = raw["train"].shuffle(seed=42).select(range(20_000))
+raw["validation"] = raw["validation"].shuffle(seed=42).select(range(2_000))
+
+def preprocess(batch):
+    toks = tokenizer(
+        batch["sentence"],
+        truncation=True,
+        padding="max_length",
+        max_length=MAX_LEN,
+    )
+    toks["labels"] = batch["label"]
+    return toks
+
+tokenized = raw.map(
+    preprocess,
+    batched=True,
+    num_proc=os.cpu_count(),
+    remove_columns=raw["train"].column_names,
+)
+tokenized.set_format("torch", columns=["input_ids", "attention_mask", "labels"])
 # ────────────────────────────────────────────────────────────────────────────────
 # 5) Metrics
 # ────────────────────────────────────────────────────────────────────────────────
@@ -143,7 +173,7 @@ def compute_metrics(pred):
 training_args_kwargs = dict(
     output_dir="gpu_finetuned_complete",
     logging_dir="logs_complete",
-    num_train_epochs=3,
+    num_train_epochs=1,
     per_device_train_batch_size=4,
     gradient_accumulation_steps=2,
     learning_rate=2e-5,
