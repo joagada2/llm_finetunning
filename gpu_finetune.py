@@ -139,9 +139,18 @@ raw = load_dataset(
     cache_dir=str(HF_CACHE / "datasets"),
 )
 
-# shuffle+take only the first 20 000 training examples and 2 000 validation examples
-raw["train"] = raw["train"].shuffle(seed=42).select(range(20_000))
-raw["validation"] = raw["validation"].shuffle(seed=42).select(range(2_000))
+# 4) Limit to a subset to make it finish in time
+n_train       = len(raw["train"])
+n_validation  = len(raw["validation"])
+n_train_sel   = min(20_000, n_train)
+n_valid_sel   = min(2_000,  n_validation)
+
+raw["train"] = raw["train"] \
+    .shuffle(seed=42) \
+    .select(range(n_train_sel))
+raw["validation"] = raw["validation"] \
+    .shuffle(seed=42) \
+    .select(range(n_valid_sel))
 
 def preprocess(batch):
     toks = tokenizer(
